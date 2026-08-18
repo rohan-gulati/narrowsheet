@@ -8,9 +8,6 @@
 # Never put a private feed URL in this file. It is committed to the repo.
 
 publications:
-  - name: "Astral Codex Ten"
-    type: public
-    url: "https://www.astralcodexten.com/feed"
 
   - name: "The Pragmatic Engineer"
     type: public
