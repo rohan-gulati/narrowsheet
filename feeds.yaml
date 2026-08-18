@@ -1,0 +1,40 @@
+# Morning Read source list.
+#
+# Three kinds of source:
+#   public  — standard Substack RSS, readable by anyone
+#   private — per-subscriber feed; the URL is a credential and lives in an env var
+#   email   — IMAP fallback for publications with no private feed
+#
+# Never put a private feed URL in this file. It is committed to the repo.
+
+publications:
+  - name: "Astral Codex Ten"
+    type: public
+    url: "https://www.astralcodexten.com/feed"
+
+  - name: "The Pragmatic Engineer"
+    type: public
+    url: "https://newsletter.pragmaticengineer.com/feed"
+
+  - name: "Stratechery"
+    type: public
+    url: "https://stratechery.com/feed/"
+
+  # A paid publication with a per-subscriber feed. Find the URL under
+  # Substack → Settings → your subscriptions → "private feed", then store it as a
+  # repository secret named FEED_EXAMPLE_PAID.
+  # - name: "Example Paid"
+  #   type: private
+  #   url_env: "FEED_EXAMPLE_PAID"
+
+  # A publication that only arrives by email. Apply a Gmail filter that labels it
+  # `kindle`, and match the sender domain here.
+  # - name: "Email Only"
+  #   type: email
+  #   match_from: "@examplepaid.substack.com"
+
+settings:
+  lookback_hours: 26
+  max_words_per_issue: 25000
+  skip_if_empty: true
+  imap_label: "kindle"

@@ -1,0 +1,71 @@
+<!-- Hand-written fixture reproducing Substack's *email* markup: table layout, inline
+     styles, a tracking pixel, a subscribe CTA and an unsubscribe footer. These appear
+     only in the emailed version of a post, never in RSS, so they cannot be captured
+     from a live feed. -->
+<body style="margin:0;padding:0;background-color:#ffffff;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f7f7;">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" border="0" class="email-container">
+      <tr>
+        <td class="preamble" style="padding:12px;font-family:Helvetica;font-size:12px;color:#999;">
+          <a href="https://examplepaid.substack.com/p/the-post-slug?utm_source=substack&amp;utm_medium=email" style="color:#999;">View this post on the web</a>
+        </td>
+      </tr>
+      <tr><td style="padding:20px 12px;">
+        <h1 style="font-family:Georgia;font-size:28px;line-height:34px;color:#111;">The Real Headline</h1>
+        <p style="font-family:Georgia;font-size:17px;line-height:26px;color:#222;">
+          <span style="color:#222;">This first paragraph is genuine body copy and must survive the sanitizer intact.</span>
+        </p>
+        <div class="subscription-widget-wrap" style="border:1px solid #ddd;padding:16px;text-align:center;">
+          <div class="subscription-widget show-subscribe">
+            <p style="font-size:15px;">Thanks for reading! Subscribe for free to receive new posts.</p>
+            <form class="subscription-widget-subscribe">
+              <input type="email" placeholder="Type your email..." style="width:100%;" />
+              <button type="submit" class="button primary" style="background:#ff6719;color:#fff;">
+                <span>Subscribe now</span>
+              </button>
+            </form>
+          </div>
+        </div>
+        <p style="font-family:Georgia;font-size:17px;line-height:26px;">
+          A second real paragraph, with <strong>bold</strong> and <em>italic</em> emphasis
+          plus <a href="https://example.com/reference">an ordinary outbound link</a>.
+        </p>
+        <blockquote style="border-left:3px solid #ccc;margin:0;padding-left:12px;">
+          <p style="font-style:italic;">A quotation that belongs in the finished chapter.</p>
+        </blockquote>
+        <figure>
+          <a class="image-link image2" href="https://substackcdn.com/image/fetch/w_1456/https%3A%2F%2Fexample.com%2Fchart.png">
+            <div class="image2-inset">
+              <img src="https://substackcdn.com/image/fetch/w_1456/https%3A%2F%2Fexample.com%2Fchart.png" width="1456" height="800" alt="A chart" class="sizing-normal" />
+              <div class="image-link-expand">
+                <button class="pencraft pc-reset icon-container view-image" type="button">
+                  <svg class="lucide lucide-maximize2" width="20" height="20"><polyline points="15 3 21 3"></polyline></svg>
+                </button>
+              </div>
+            </div>
+          </a>
+          <figcaption class="image-caption">Figure caption that should be kept.</figcaption>
+        </figure>
+        <div class="post-ufi" style="text-align:center;padding:16px 0;">
+          <a href="https://examplepaid.substack.com/p/the-post-slug/comments" style="color:#ff6719;">Leave a comment</a>
+          <a href="https://open.substack.com/pub/examplepaid/p/the-post-slug?utm_campaign=email-restack" style="color:#ff6719;">Share this post</a>
+        </div>
+        <p style="font-family:Georgia;font-size:17px;">The closing paragraph of the actual article.</p>
+      </td></tr>
+      <tr>
+        <td class="email-footer" style="padding:20px 12px;font-family:Helvetica;font-size:12px;color:#999;text-align:center;">
+          <p>You're receiving this because you subscribed to Example Paid.</p>
+          <p>
+            <a href="https://examplepaid.substack.com/account?action=unsubscribe&amp;token=abc123">Unsubscribe</a>
+            &middot;
+            <a href="https://examplepaid.substack.com/account">Manage your subscription</a>
+          </p>
+          <p><a href="https://substack.com/app-link/post?publication_id=1234">Read on Substack</a></p>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
+<img src="https://open.substack.com/o/12345/open?token=eyJhbGciOi" width="1" height="1" border="0" alt="" style="display:none;" />
+</body>
