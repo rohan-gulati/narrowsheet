@@ -131,7 +131,7 @@ def test_success_notification_lists_every_post(monkeypatch: pytest.MonkeyPatch) 
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         deliver, "_post_ntfy",
-        lambda topic, title, body, priority="default": captured.update(
+        lambda topic, title, body, priority=3: captured.update(
             topic=topic, title=title, body=body, priority=priority
         ),
     )
@@ -149,7 +149,7 @@ def test_success_notification_pluralises_one_post(monkeypatch: pytest.MonkeyPatc
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         deliver, "_post_ntfy",
-        lambda topic, title, body, priority="default": captured.update(title=title),
+        lambda topic, title, body, priority=3: captured.update(title=title),
     )
     notify_success(CONFIG, [make_post("Only", 300)], [])
     assert captured["title"] == "Morning Read — 1 post"
@@ -189,12 +189,12 @@ def test_failure_notification_is_high_priority(monkeypatch: pytest.MonkeyPatch) 
     captured: dict[str, object] = {}
     monkeypatch.setattr(
         deliver, "_post_ntfy",
-        lambda topic, title, body, priority="default": captured.update(
+        lambda topic, title, body, priority=3: captured.update(
             title=title, body=body, priority=priority
         ),
     )
     notify_failure(CONFIG, "SMTP failed after 3 attempts")
-    assert captured["priority"] == "high"
+    assert captured["priority"] == 4
     assert "FAILED" in captured["title"]
     assert "SMTP failed" in captured["body"]
 
@@ -324,3 +324,39 @@ def test_attached_epub_survives_a_round_trip(epub_file: Path) -> None:
     reparsed = email_module.message_from_bytes(bytes(message), policy=email.policy.default)
     attachment = next(part for part in reparsed.iter_attachments())
     assert attachment.get_payload(decode=True) == original
+
+
+def test_ntfy_payload_matches_the_api_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: priority was sent as the string "default" and ntfy 400'd.
+
+    The earlier stub accepted any payload, so the suite stayed green while every
+    notification failed in production. This one enforces ntfy's actual JSON types.
+    """
+    seen: list[dict[str, object]] = []
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def strict_post(url: str, json: dict[str, object], timeout: int) -> Response:
+        assert set(json) <= {"topic", "title", "message", "priority", "tags"}
+        assert isinstance(json["topic"], str) and json["topic"]
+        assert isinstance(json["title"], str)
+        assert isinstance(json["message"], str)
+        # ntfy rejects a string priority with 400; it must be an int in 1..5.
+        assert isinstance(json["priority"], int) and not isinstance(json["priority"], bool)
+        assert 1 <= json["priority"] <= 5
+        seen.append(json)
+        return Response()
+
+    monkeypatch.setattr(deliver.httpx, "post", strict_post)
+
+    notify_success(CONFIG, [make_post("One", 400)], [make_post("Two", 50, "Stratechery")])
+    notify_failure(CONFIG, "SMTP failed after 3 attempts")
+
+    assert len(seen) == 2
+    assert seen[0]["priority"] == deliver.NTFY_PRIORITY_DEFAULT
+    assert seen[1]["priority"] == deliver.NTFY_PRIORITY_HIGH
+    assert "—" in seen[0]["title"], "the em dash must survive the JSON round trip"

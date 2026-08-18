@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import smtplib
 import time
 from dataclasses import dataclass
@@ -18,7 +19,7 @@ from pathlib import Path
 import httpx
 
 from .clean import CleanedPost
-from .config import register_secret
+from .config import redact, register_secret
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,10 @@ RETRY_BACKOFF_SECONDS = (5, 20)
 
 NTFY_URL = "https://ntfy.sh"
 NTFY_TIMEOUT = 15
+# ntfy's JSON API takes priority as an integer 1-5 and rejects the string names
+# ("high", "default") that its header API accepts, with a 400.
+NTFY_PRIORITY_DEFAULT = 3
+NTFY_PRIORITY_HIGH = 4
 
 STATE_RETENTION_DAYS = 60
 
@@ -40,6 +45,18 @@ PERMANENT_SMTP_ERRORS = (
     smtplib.SMTPSenderRefused,
     smtplib.SMTPNotSupportedError,
 )
+
+
+def _annotate(message: str) -> None:
+    """Surface a problem on the Action's run summary.
+
+    A failed notification cannot announce itself through the notification channel,
+    and it must not fail the job either -- the issue is already on the device, and a
+    red run would skip the state commit and re-send everything tomorrow. A warning
+    annotation is the one signal left.
+    """
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::warning title=Morning Read::{redact(message)}", flush=True)
 
 
 class DeliveryError(RuntimeError):
@@ -126,12 +143,16 @@ def send_issue(epub_path: Path, subject: str, config: DeliveryConfig) -> None:
             time.sleep(delay)
 
 
-def _post_ntfy(topic: str, title: str, body: str, priority: str = "default") -> None:
+def _post_ntfy(
+    topic: str, title: str, body: str, priority: int = NTFY_PRIORITY_DEFAULT
+) -> None:
     # The JSON endpoint rather than headers: an em dash in the title is not
-    # latin-1 encodable and would blow up header serialisation.
+    # latin-1 encodable and would blow up header serialisation. Note that this
+    # endpoint requires an integer priority; the string names the header API takes
+    # are rejected as malformed JSON.
     response = httpx.post(
         NTFY_URL,
-        json={"topic": topic, "title": title, "message": body, "priority": priority},
+        json={"topic": topic, "title": title, "message": body, "priority": int(priority)},
         timeout=NTFY_TIMEOUT,
     )
     response.raise_for_status()
@@ -147,9 +168,10 @@ def notify_success(config: DeliveryConfig, chapters: list[CleanedPost],
     title = f"Morning Read — {len(chapters)} post{'' if len(chapters) == 1 else 's'}"
     try:
         _post_ntfy(config.ntfy_topic, title, "\n".join(lines) or "Nothing new today.")
-    except Exception:
+    except Exception as exc:
         # The issue is already on the Kindle; a failed ping must not fail the run.
         log.exception("could not send the success notification")
+        _annotate(f"Issue delivered, but the ntfy notification failed: {type(exc).__name__}")
 
 
 def notify_failure(config: DeliveryConfig | None, summary: str) -> None:
@@ -159,9 +181,10 @@ def notify_failure(config: DeliveryConfig | None, summary: str) -> None:
         log.info("no NTFY_TOPIC configured; skipping failure notification")
         return
     try:
-        _post_ntfy(topic, "Morning Read — FAILED", summary, priority="high")
-    except Exception:
+        _post_ntfy(topic, "Morning Read — FAILED", summary, priority=NTFY_PRIORITY_HIGH)
+    except Exception as exc:
         log.exception("could not send the failure notification")
+        _annotate(f"The run failed AND the failure notification failed: {type(exc).__name__}")
 
 
 def load_seen(path: str | Path) -> set[str]:
