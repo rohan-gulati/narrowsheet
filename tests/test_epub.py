@@ -144,3 +144,89 @@ def test_normal_issue_stays_chronological() -> None:
     ordered, _, oversized = order_chapters(posts, max_words=25000)
     assert oversized is False
     assert [c.post.title for c in ordered] == ["Older", "Newer"]
+
+
+def test_chapter_header_includes_kicker_dateline_and_read_time(tmp_path: Path) -> None:
+    """The masthead-style header replaced the old plain h1 + uppercase byline."""
+    out = tmp_path / "issue.epub"
+    build_epub(
+        [make_post("A Long Enough Title", 600, "Astral Codex Ten", minutes_ago=120)],
+        [],
+        date(2026, 8, 18),
+        25000,
+        out,
+    )
+    with zipfile.ZipFile(out) as archive:
+        chapter = archive.read("EPUB/chap_1.xhtml").decode()
+
+    assert 'class="kicker"' in chapter
+    assert 'class="dateline"' in chapter
+    assert "Astral Codex Ten" in chapter
+    assert "No. 01" in chapter, "single-chapter issue should still zero-pad to 2 digits"
+    assert "MIN READ" in chapter
+    assert 'class="headline"' in chapter
+    assert 'class="chapter-rule"' in chapter
+    assert 'class="chapter-body"' in chapter, "needed so the drop-cap selector can scope to it"
+    assert "byline" not in chapter, "the old plain byline paragraph should be gone"
+
+
+def test_chapter_numbering_zero_pads_to_the_issue_size(tmp_path: Path) -> None:
+    posts = [make_post(f"Post {n}", 300, minutes_ago=n) for n in range(12)]
+    out = tmp_path / "issue.epub"
+    build_epub(posts, [], date(2026, 8, 18), 25000, out)
+    with zipfile.ZipFile(out) as archive:
+        first = archive.read("EPUB/chap_1.xhtml").decode()
+        twelfth = archive.read("EPUB/chap_12.xhtml").decode()
+    assert "No. 01" in first
+    assert "No. 12" in twelfth
+
+
+def test_front_page_groups_entries_by_publication_into_sections(tmp_path: Path) -> None:
+    posts = [
+        make_post("ACX One", 400, "Astral Codex Ten", minutes_ago=200),
+        make_post("Strat One", 400, "Stratechery", minutes_ago=150),
+        make_post("ACX Two", 400, "Astral Codex Ten", minutes_ago=100),
+    ]
+    out = tmp_path / "issue.epub"
+    build_epub(posts, [], date(2026, 8, 18), 25000, out)
+    with zipfile.ZipFile(out) as archive:
+        contents = archive.read("EPUB/contents.xhtml").decode()
+
+    assert contents.count('class="section-head"') == 2, "one heading per publication"
+    assert "<h2 class=\"section-head\">Astral Codex Ten</h2>" in contents
+    assert "<h2 class=\"section-head\">Stratechery</h2>" in contents
+    # Both Astral Codex Ten entries should be grouped together under its one heading,
+    # not interleaved with Stratechery's, and the section owns the pub name now so
+    # per-item pub labels are gone.
+    acx_section = contents.split('Astral Codex Ten</h2>')[1].split("</ul>")[0]
+    assert "ACX One" in acx_section and "ACX Two" in acx_section
+    assert 'class="pub"' not in contents, "redundant once grouped under a section heading"
+
+
+def test_front_page_section_order_follows_first_appearance(tmp_path: Path) -> None:
+    """Sections should not silently re-sort into alphabetical or some other order."""
+    posts = [
+        make_post("Z First", 400, "Zzz Publication", minutes_ago=200),
+        make_post("A Second", 400, "Aaa Publication", minutes_ago=100),
+    ]
+    out = tmp_path / "issue.epub"
+    build_epub(posts, [], date(2026, 8, 18), 25000, out)
+    with zipfile.ZipFile(out) as archive:
+        contents = archive.read("EPUB/contents.xhtml").decode()
+    assert contents.index("Zzz Publication") < contents.index("Aaa Publication")
+
+
+def test_stylesheet_declares_the_new_magazine_classes() -> None:
+    from mornings.epub import STYLESHEET
+
+    for selector in (
+        ".kicker",
+        ".dateline",
+        ".chapter-rule",
+        ".headline",
+        ".section-head",
+        ".chapter-body",
+        "::first-letter",
+    ):
+        assert selector in STYLESHEET, f"missing {selector} in the stylesheet"
+    assert "text-align: center" in STYLESHEET, "blockquote should read as a centred pull quote"

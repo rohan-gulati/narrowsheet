@@ -41,15 +41,29 @@ h2 { font-size: 1.25em; }
 h3 { font-size: 1.1em; }
 h4 { font-size: 1em; font-style: italic; }
 
+/* Chapter headline: bigger and tighter than a plain h1, reads as a magazine
+   feature title rather than a body heading. */
+.headline {
+  font-size: 1.7em;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5em;
+}
+
 p {
   margin: 0 0 0.8em;
 }
 
+/* Pull-quote treatment: rules above/below and a larger size, not a left border. */
 blockquote {
-  margin: 1.3em 0 1.3em 0.5em;
-  padding-left: 0.9em;
-  border-left: 0.18em solid #888;
+  margin: 1.8em 0;
+  padding: 0.9em 0;
+  border-top: 0.09em solid #111;
+  border-bottom: 0.09em solid #111;
+  font-size: 1.3em;
+  line-height: 1.45;
   font-style: italic;
+  text-align: center;
 }
 
 blockquote p:last-child { margin-bottom: 0; }
@@ -129,11 +143,49 @@ a {
 .contents .pub { font-size: 0.78em; letter-spacing: 0.09em; text-transform: uppercase; }
 .contents .title { display: block; font-size: 1.05em; }
 .contents .mins { font-size: 0.8em; font-style: italic; }
-.byline {
+/* Chapter header: kicker (publication) + dateline (issue no. / date / read time). */
+.meta-line {
+  margin: 0 0 0.5em;
   font-size: 0.78em;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.06em;
+}
+.kicker {
   text-transform: uppercase;
-  margin: -0.2em 0 2em;
+  font-weight: bold;
+}
+.dateline {
+  text-transform: uppercase;
+  color: #444;
+}
+.chapter-rule {
+  border: 0;
+  border-top: 0.14em solid #111;
+  border-bottom: 0.02em solid #111;
+  height: 0.22em;
+  margin: 0 0 1.6em;
+}
+
+/* Drop cap on the article's opening paragraph, when it opens with one. CSS-only
+   and safe: if the chapter opens with a blockquote or figure instead, this selector
+   simply doesn't match and nothing breaks. */
+.chapter-body > p:first-child::first-letter {
+  float: left;
+  font-size: 3.2em;
+  line-height: 0.78;
+  font-weight: normal;
+  padding-right: 0.09em;
+  padding-top: 0.03em;
+}
+
+/* Front page, grouped into sections by publication. */
+.section-head {
+  font-size: 0.85em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: normal;
+  margin: 1.6em 0 0.5em;
+  padding-bottom: 0.25em;
+  border-bottom: 0.09em solid #111;
 }
 
 .cover-note { font-size: 0.82em; font-style: italic; margin-top: 2.5em; }
@@ -395,17 +447,25 @@ def _cover_html(
 
     if chapters:
         parts.append('<p class="cover-heading">In this issue</p>')
-        parts.append('<ul class="contents">')
+        # Grouped into sections by publication, in order of first appearance, so the
+        # front page reads like a table of contents organised by section rather than
+        # one flat list. The section heading carries the publication name, so the
+        # per-item pub label from the old flat list is dropped as redundant.
+        sections: dict[str, list[tuple[int, CleanedPost]]] = {}
         for index, chapter in enumerate(chapters, 1):
-            parts.append(
-                "<li>"
-                f'<span class="pub">{_escape(chapter.post.publication)}</span>'
-                f'<a class="title" href="chap_{index}.xhtml">'
-                f"{_escape(chapter.post.title)}</a>"
-                f'<span class="mins">{chapter.read_minutes} min</span>'
-                "</li>"
-            )
-        parts.append("</ul>")
+            sections.setdefault(chapter.post.publication, []).append((index, chapter))
+        for pub_name, entries in sections.items():
+            parts.append(f'<h2 class="section-head">{_escape(pub_name)}</h2>')
+            parts.append('<ul class="contents">')
+            for index, chapter in entries:
+                parts.append(
+                    "<li>"
+                    f'<a class="title" href="chap_{index}.xhtml">'
+                    f"{_escape(chapter.post.title)}</a>"
+                    f'<span class="mins">{chapter.read_minutes} min</span>'
+                    "</li>"
+                )
+            parts.append("</ul>")
 
     if previews:
         parts.append('<p class="cover-heading">Previews only</p>')
@@ -481,13 +541,26 @@ def build_epub(
     spine: list[object] = (["cover"] if has_cover else []) + [contents, "nav"]
     toc: list[object] = [epub.Link("contents.xhtml", "Contents", "contents")]
 
+    # Zero-padded to at least 2 digits so "No. 3" and "No. 12" line up; wider only
+    # if the issue somehow runs past 99 chapters.
+    number_width = max(2, len(str(len(chapters))))
+
     for index, chapter in enumerate(chapters, 1):
         item = epub.EpubHtml(title=chapter.title, file_name=f"chap_{index}.xhtml", lang="en")
-        heading = (
-            f'<h1>{_escape(chapter.post.title)}</h1>'
-            f'<p class="byline">{_escape(chapter.post.publication)}</p>'
+        dateline = (
+            f"No. {index:0{number_width}d} · "
+            f"{chapter.post.published.strftime('%b %d').upper()} · "
+            f"{chapter.read_minutes} MIN READ"
         )
-        item.content = heading + "\n" + chapter.html
+        heading = (
+            '<p class="meta-line">'
+            f'<span class="kicker">{_escape(chapter.post.publication)}</span>'
+            f' · <span class="dateline">{dateline}</span>'
+            "</p>"
+            f'<h1 class="headline">{_escape(chapter.post.title)}</h1>'
+            '<hr class="chapter-rule"/>'
+        )
+        item.content = heading + f'<div class="chapter-body">\n{chapter.html}\n</div>'
         item.add_item(style)
         book.add_item(item)
         spine.append(item)

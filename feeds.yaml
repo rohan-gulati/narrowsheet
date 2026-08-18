@@ -32,6 +32,34 @@ publications:
     type: public
     url: "https://www.oneusefulthing.org/feed"
 
+  - name: "Sharp by Swarajya"
+    type: public
+    url: "https://sharpbyswarajya.substack.com/feed"
+
+  - name: "Maritime Trade History"
+    type: public
+    url: "https://nickcollins1953.substack.com/feed"
+
+  - name: "Technically"
+    type: public
+    url: "https://read.technically.dev/feed"
+
+  - name: "Casual Physics Enjoyer"
+    type: public
+    url: "https://chillphysicsenjoyer.substack.com/feed"
+
+  - name: "Contraptions"
+    type: public
+    url: "https://contraptions.venkateshrao.com/feed"
+
+  - name: "Seymour Hersh"
+    type: public
+    url: "https://seymourhersh.substack.com/feed"
+
+  - name: "Uncharted Territories"
+    type: public
+    url: "https://unchartedterritories.tomaspueyo.com/feed"
+
   # A paid publication with a per-subscriber feed. Find the URL under
   # Substack → Settings → your subscriptions → "private feed", then store it as a
   # repository secret named FEED_EXAMPLE_PAID.
