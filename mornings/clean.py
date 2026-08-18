@@ -12,7 +12,7 @@ import io
 import logging
 import re
 from dataclasses import dataclass, field
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 import httpx
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -200,6 +200,17 @@ def _drop_chrome_by_text(root: Tag) -> None:
             tag.decompose()
 
 
+# RFC 3986 reserved/unreserved characters, plus "%" so an already-encoded sequence
+# is not double-escaped. Ad-tracking links routinely carry a raw "|" in the query
+# string (seen from a sponsor link in Lenny's Newsletter), which is illegal in a URL
+# and fails EPUB validation outright.
+_URL_SAFE_CHARS = "%:/?#[]@!$&'()*+,;="
+
+
+def _safe_href(url: str) -> str:
+    return quote(url, safe=_URL_SAFE_CHARS)
+
+
 def _strip_attributes(root: Tag) -> None:
     for tag in root.find_all(True):
         if not _alive(tag):
@@ -208,6 +219,8 @@ def _strip_attributes(root: Tag) -> None:
         for name in list(tag.attrs):
             if name not in allowed:
                 del tag[name]
+        if tag.name == "a" and tag.get("href"):
+            tag["href"] = _safe_href(tag["href"])
 
 
 def _unwrap_to_allowlist(root: Tag) -> None:

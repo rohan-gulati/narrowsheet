@@ -8,14 +8,29 @@
 # Never put a private feed URL in this file. It is committed to the repo.
 
 publications:
-
-  - name: "The Pragmatic Engineer"
+  - name: "AI Futures Project"
     type: public
-    url: "https://newsletter.pragmaticengineer.com/feed"
+    url: "https://blog.aifutures.org/feed"
 
-  - name: "Stratechery"
+  - name: "The Algorithmic Bridge"
     type: public
-    url: "https://stratechery.com/feed/"
+    url: "https://www.thealgorithmicbridge.com/feed"
+
+  - name: "Lenny's Newsletter"
+    type: public
+    url: "https://www.lennysnewsletter.com/feed"
+
+  - name: "Polity and Policy"
+    type: public
+    url: "https://politypolicy.substack.com/feed"
+
+  - name: "Noahpinion"
+    type: public
+    url: "https://www.noahpinion.blog/feed"
+
+  - name: "One Useful Thing"
+    type: public
+    url: "https://www.oneusefulthing.org/feed"
 
   # A paid publication with a per-subscriber feed. Find the URL under
   # Substack → Settings → your subscriptions → "private feed", then store it as a

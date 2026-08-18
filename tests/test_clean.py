@@ -220,3 +220,37 @@ def test_standalone_cta_block_is_removed_entirely() -> None:
     assert "Subscribe now" not in fragment
     assert "Body copy worth keeping." in fragment
     assert soup_of(fragment).find_all("p") == soup_of(fragment).find_all("p")[:1]
+
+
+def test_href_with_illegal_url_characters_is_percent_encoded() -> None:
+    """Regression: a sponsor link in Lenny's Newsletter carried a raw '|' in the
+    query string (an ad-campaign param like "P:jira|O:ppm"), which is illegal in a
+    URL per RFC 3986 and made epubcheck reject the chapter outright.
+    """
+    bad_href = "https://example.com/x?utm_campaign=P:jira|O:ppm&dclid=abc123"
+    fragment, _, _ = clean_html(
+        f'<p>Sponsored by <a href="{bad_href}">Jira</a>.</p>', **CLEAN_KWARGS
+    )
+    link = soup_of(fragment).find("a")
+    assert link is not None
+    assert "|" not in link["href"], "raw pipe is not a legal URL character"
+    assert "%7C" in link["href"]
+    # The rest of the URL must survive untouched, not just the illegal character.
+    assert link["href"].startswith("https://example.com/x?utm_campaign=P:jira")
+
+
+def test_ordinary_href_is_left_untouched() -> None:
+    fragment, _, _ = clean_html(
+        '<p><a href="https://example.com/path?a=b&c=d#section">link</a></p>', **CLEAN_KWARGS
+    )
+    link = soup_of(fragment).find("a")
+    assert link["href"] == "https://example.com/path?a=b&c=d#section"
+
+
+def test_already_percent_encoded_href_is_not_double_encoded() -> None:
+    fragment, _, _ = clean_html(
+        '<p><a href="https://example.com/path%20with%20space?q=a%2Bb">link</a></p>',
+        **CLEAN_KWARGS,
+    )
+    link = soup_of(fragment).find("a")
+    assert link["href"] == "https://example.com/path%20with%20space?q=a%2Bb"
