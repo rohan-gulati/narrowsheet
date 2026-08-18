@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
 import shutil
@@ -15,6 +14,15 @@ from pathlib import Path
 
 from .clean import clean_post
 from .config import load_config, setup_logging
+from .deliver import (
+    DeliveryConfig,
+    DeliveryError,
+    load_seen,
+    notify_failure,
+    notify_success,
+    record_sent,
+    send_issue,
+)
 from .epub import build_epub, issue_title
 from .fetch import fetch_all, fetch_single, select_recent
 
@@ -23,18 +31,6 @@ log = logging.getLogger("mornings")
 DEFAULT_CONFIG = "feeds.yaml"
 DEFAULT_STATE = "state/seen.json"
 DEFAULT_OUT = "out"
-
-
-def load_seen(path: str | Path) -> set[str]:
-    file = Path(path)
-    if not file.exists():
-        return set()
-    try:
-        data = json.loads(file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        log.warning("%s is not valid JSON; treating every post as unseen", path)
-        return set()
-    return set(data.get("guids", {}))
 
 
 def run_epubcheck(epub_path: Path) -> None:
@@ -54,7 +50,7 @@ def run_epubcheck(epub_path: Path) -> None:
         log.warning("epubcheck reported problems:\n%s", (result.stdout or result.stderr)[-4000:])
 
 
-def command_run(args: argparse.Namespace) -> int:
+def _run_pipeline(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     settings = config.settings
     if args.lookback_hours:
@@ -92,8 +88,37 @@ def command_run(args: argparse.Namespace) -> int:
         log.info("dry run: wrote %s, sent nothing, wrote no state", out_path)
         return 0
 
-    log.error("delivery is not wired up yet; re-run with --dry-run")
-    return 1
+    delivery: DeliveryConfig | None = None
+    try:
+        delivery = DeliveryConfig.from_env(dict(os.environ))
+        send_issue(out_path, issue_title(today), delivery)
+    except DeliveryError as exc:
+        # Nothing is marked seen, so tomorrow's run retries these same posts.
+        log.error("delivery failed: %s", exc)
+        notify_failure(delivery, f"{exc}\n\n{len(cleaned)} posts were not delivered.")
+        return 1
+
+    notify_success(delivery, chapters, previews)
+    record_sent(args.state, cleaned, today)
+    return 0
+
+
+def command_run(args: argparse.Namespace) -> int:
+    """Run the pipeline, announcing any breakage rather than failing quietly."""
+    if args.dry_run:
+        return _run_pipeline(args)
+    try:
+        return _run_pipeline(args)
+    except Exception as exc:
+        log.exception("run failed")
+        # Build a config purely to reach the notification channel; if even that is
+        # unavailable there is nothing more we can do than the log line above.
+        try:
+            delivery = DeliveryConfig.from_env(dict(os.environ))
+        except DeliveryError:
+            delivery = None
+        notify_failure(delivery, f"{type(exc).__name__}: {exc}")
+        return 1
 
 
 def command_preview(args: argparse.Namespace) -> int:
