@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import functools
+import io
 import logging
 import uuid
 from datetime import date
 from pathlib import Path
 
 from ebooklib import epub
+from PIL import Image, ImageDraw, ImageFont
 
 from .clean import CleanedPost
 
@@ -137,6 +140,217 @@ a {
 """
 
 
+# --------------------------------------------------------------------------------
+# Cover image
+#
+# Kindle shows this in the library grid, so it has to read at thumbnail size: a few
+# big shapes, high contrast, no fine detail. Greyscale to match the rest of the issue.
+# --------------------------------------------------------------------------------
+
+COVER_SIZE = (1400, 2100)  # 2:3, the ratio Kindle expects
+COVER_INK = 17
+COVER_MUTED = 105
+COVER_PAPER = 255
+COVER_INSET = 54
+# Everything below this y is fixed, so every edition shares one skeleton.
+LOWER_BLOCK_TOP = 1512
+
+_FONT_DIRS = (
+    "/usr/share/fonts/truetype/dejavu",
+    "/usr/share/fonts/truetype/liberation",
+    "/usr/share/fonts/truetype/freefont",
+    "/usr/share/fonts/truetype",
+    "/usr/share/fonts",
+    "/Library/Fonts",
+    "/System/Library/Fonts/Supplemental",
+    "C:/Windows/Fonts",
+)
+
+_SERIF = ("DejaVuSerif.ttf", "LiberationSerif-Regular.ttf", "FreeSerif.ttf", "Georgia.ttf")
+_SERIF_BOLD = (
+    "DejaVuSerif-Bold.ttf",
+    "LiberationSerif-Bold.ttf",
+    "FreeSerifBold.ttf",
+    "Georgia Bold.ttf",
+)
+_SERIF_ITALIC = (
+    "DejaVuSerif-Italic.ttf",
+    "LiberationSerif-Italic.ttf",
+    "FreeSerifItalic.ttf",
+    "Georgia Italic.ttf",
+)
+
+
+@functools.lru_cache(maxsize=8)
+def _find_font_file(names: tuple[str, ...]) -> str | None:
+    for name in names:
+        for directory in _FONT_DIRS:
+            candidate = Path(directory) / name
+            if candidate.exists():
+                return str(candidate)
+    return None
+
+
+def _font(names: tuple[str, ...], size: int) -> ImageFont.FreeTypeFont:
+    """Resolve a font, falling back to Pillow's own scalable face.
+
+    A bare runner with no system fonts installed still gets a usable cover rather
+    than a crashed run.
+    """
+    path = _find_font_file(names)
+    if path:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            log.debug("could not load %s; falling back", path)
+    return ImageFont.load_default(size=size)
+
+
+def _draw_tracked(
+    draw: ImageDraw.ImageDraw,
+    center_x: float,
+    top_y: float,
+    text: str,
+    font: ImageFont.FreeTypeFont,
+    tracking: float,
+    fill: int,
+) -> float:
+    """Letterspaced, centred text drawn from its top edge. Returns the height drawn.
+
+    Pillow has no tracking, so each glyph is placed individually.
+    """
+    widths = [draw.textlength(char, font=font) for char in text]
+    total = sum(widths) + tracking * max(0, len(text) - 1)
+    x = center_x - total / 2
+    for char, width in zip(text, widths, strict=True):
+        draw.text((x, top_y), char, font=font, fill=fill, anchor="lt")
+        x += width + tracking
+    return _text_height(draw, text, font)
+
+
+def _text_height(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> float:
+    box = draw.textbbox((0, 0), text, font=font, anchor="lt")
+    return box[3] - box[1]
+
+
+def _fit_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    names: tuple[str, ...],
+    size: int,
+    max_width: int,
+) -> ImageFont.FreeTypeFont:
+    """Shrink until it fits, so a long weekday or big word count never overflows."""
+    while size > 12:
+        font = _font(names, size)
+        if draw.textlength(text, font=font) <= max_width:
+            return font
+        size -= 4
+    return _font(names, size)
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def build_cover_image(
+    day: date,
+    chapter_count: int,
+    preview_count: int,
+    total_words: int,
+    publications: list[str],
+) -> bytes:
+    """Draw the edition cover.
+
+    The layout is measured rather than positioned at fixed offsets: glyph heights vary
+    enough between the preferred serif and the fallback face that hardcoded y-values
+    collide (a 300px "18" happily overlaps the month above it).
+    """
+    width, height = COVER_SIZE
+    canvas = Image.new("L", COVER_SIZE, COVER_PAPER)
+    draw = ImageDraw.Draw(canvas)
+    middle = width / 2
+    max_text_width = width - 2 * (COVER_INSET + 18) - 80
+
+    # Frame
+    draw.rectangle(
+        [COVER_INSET, COVER_INSET, width - COVER_INSET, height - COVER_INSET],
+        outline=COVER_INK,
+        width=4,
+    )
+    inner = COVER_INSET + 18
+    draw.rectangle([inner, inner, width - inner, height - inner], outline=COVER_MUTED, width=1)
+
+    # Masthead
+    mast_font = _font(_SERIF, 50)
+    mast_height = _draw_tracked(draw, middle, 205, "MORNING READ", mast_font, 17, COVER_INK)
+    rule_y = 205 + mast_height + 34
+    draw.line([(middle - 190, rule_y), (middle + 190, rule_y)], fill=COVER_INK, width=3)
+
+    # Bottom block, laid out upward from the frame so it never runs into the border.
+    listed = publications[:5]
+    remaining = len(publications) - len(listed)
+    if remaining > 0:
+        listed.append(f"and {remaining} more")
+
+    # Fixed positions, not bottom-anchored: these come out daily, and a masthead that
+    # drifts by a few dozen pixels depending on how many publications ran looks wrong
+    # when the editions sit next to each other in the library.
+    pub_line_height = 58
+    pubs_top = LOWER_BLOCK_TOP + 148
+
+    summary = f"{_plural(chapter_count, 'post')} · {total_words:,} words"
+    if preview_count:
+        summary += f" · {_plural(preview_count, 'preview')}"
+    summary_font = _fit_text(draw, summary, _SERIF, 46, max_text_width)
+    summary_top = LOWER_BLOCK_TOP + 52
+    draw.text((middle, summary_top), summary, font=summary_font, fill=COVER_INK, anchor="mt")
+
+    lower_rule_y = LOWER_BLOCK_TOP
+    draw.line(
+        [(middle - 130, lower_rule_y), (middle + 130, lower_rule_y)], fill=COVER_MUTED, width=2
+    )
+
+    y = pubs_top
+    for name in listed:
+        name_font = _fit_text(draw, name, _SERIF, 42, max_text_width)
+        draw.text((middle, y), name, font=name_font, fill=COVER_MUTED, anchor="mt")
+        y += pub_line_height
+
+    # Date block, centred in whatever space is left between the two rules.
+    month_font = _fit_text(draw, day.strftime("%B").upper(), _SERIF, 76, max_text_width - 200)
+    day_font = _font(_SERIF_BOLD, 300)
+    year_font = _font(_SERIF, 74)
+    weekday_font = _fit_text(draw, day.strftime("%A"), _SERIF_ITALIC, 62, max_text_width)
+
+    month_text = day.strftime("%B").upper()
+    day_text = day.strftime("%d").lstrip("0")
+    year_text = day.strftime("%Y")
+    weekday_text = day.strftime("%A")
+
+    gaps = (42, 24, 46)
+    heights = (
+        _text_height(draw, month_text, month_font),
+        _text_height(draw, day_text, day_font),
+        _text_height(draw, year_text, year_font),
+        _text_height(draw, weekday_text, weekday_font),
+    )
+    block_height = sum(heights) + sum(gaps)
+    band_top = rule_y + 40
+    band_bottom = lower_rule_y - 40
+    y = band_top + max(0.0, (band_bottom - band_top - block_height) / 2)
+
+    y += _draw_tracked(draw, middle, y, month_text, month_font, 15, COVER_INK) + gaps[0]
+    draw.text((middle, y), day_text, font=day_font, fill=COVER_INK, anchor="mt")
+    y += heights[1] + gaps[1]
+    y += _draw_tracked(draw, middle, y, year_text, year_font, 12, COVER_MUTED) + gaps[2]
+    draw.text((middle, y), weekday_text, font=weekday_font, fill=COVER_MUTED, anchor="mt")
+
+    buffer = io.BytesIO()
+    canvas.save(buffer, format="JPEG", quality=88, optimize=True, progressive=True)
+    return buffer.getvalue()
+
+
 def issue_title(day: date) -> str:
     """ISO date first so the Kindle library sorts issues chronologically by title."""
     return f"{day.isoformat()} — Morning Read"
@@ -241,13 +455,31 @@ def build_epub(
     )
     book.add_item(style)
 
-    cover = epub.EpubHtml(title="Contents", file_name="cover.xhtml", lang="en")
-    cover.content = _cover_html(day, chapters, previews, total_words, oversized)
-    cover.add_item(style)
-    book.add_item(cover)
+    publications = list(dict.fromkeys(c.post.publication for c in chapters + previews))
+    has_cover = False
+    try:
+        book.set_cover(
+            "cover.jpg",
+            build_cover_image(day, len(chapters), len(previews), total_words, publications),
+        )
+        # ebooklib marks its cover page linear="no", which EPUB 3.3 rejects unless
+        # something hyperlinks to it. Making it the genuine first page is both valid
+        # and what a reader expects when opening the issue.
+        for item in book.items:
+            if isinstance(item, epub.EpubCoverHtml):
+                item.is_linear = True
+        has_cover = True
+    except Exception:
+        # A cover is a nicety; never lose the issue over one.
+        log.exception("cover generation failed; continuing without a cover image")
 
-    spine: list[object] = [cover, "nav"]
-    toc: list[object] = [epub.Link("cover.xhtml", "Contents", "contents")]
+    contents = epub.EpubHtml(title="Contents", file_name="contents.xhtml", lang="en")
+    contents.content = _cover_html(day, chapters, previews, total_words, oversized)
+    contents.add_item(style)
+    book.add_item(contents)
+
+    spine: list[object] = (["cover"] if has_cover else []) + [contents, "nav"]
+    toc: list[object] = [epub.Link("contents.xhtml", "Contents", "contents")]
 
     for index, chapter in enumerate(chapters, 1):
         item = epub.EpubHtml(title=chapter.title, file_name=f"chap_{index}.xhtml", lang="en")
