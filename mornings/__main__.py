@@ -68,11 +68,30 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         log.info("nothing new; skipping this issue")
         return 0
 
+    min_words_by_pub = {
+        p.name: p.min_words for p in config.publications if p.min_words is not None
+    }
+
     cleaned = []
     image_offset = 0
     for post in fresh:
         result = clean_post(post, image_index_offset=image_offset)
         image_offset += len(result.images)
+        # Applied after cleaning, since the word count is not known until the chrome
+        # is stripped. Scoped to non-truncated posts on purpose: the floor exists to
+        # drop podcast show-note stubs, whereas a truncated post is short only because
+        # the publisher paywalled the feed, and those are already handled by being
+        # listed on the cover as a preview instead of becoming a chapter.
+        floor = min_words_by_pub.get(post.publication)
+        if floor is not None and not result.truncated and result.word_count < floor:
+            log.info(
+                "skipped %s — %s (%d words, under the %d-word floor)",
+                post.publication,
+                post.title,
+                result.word_count,
+                floor,
+            )
+            continue
         cleaned.append(result)
         state = "preview" if result.truncated else f"{result.word_count} words"
         log.info("cleaned %s — %s (%s)", post.publication, post.title, state)

@@ -254,3 +254,39 @@ def test_already_percent_encoded_href_is_not_double_encoded() -> None:
     )
     link = soup_of(fragment).find("a")
     assert link["href"] == "https://example.com/path%20with%20space?q=a%2Bb"
+
+
+# --------------------------------------------------------------------- title filters
+
+
+def test_excluded_title_pattern_matches_case_insensitively() -> None:
+    from mornings.fetch import excluded_title_pattern
+
+    assert excluded_title_pattern("How I AI: episode 4", ("how i ai",)) == "how i ai"
+    assert excluded_title_pattern("HOW I AI", ("How I AI",)) == "How I AI"
+    assert excluded_title_pattern("An ordinary essay", ("How I AI",)) is None
+
+
+def test_pipe_pattern_is_a_substring_not_a_regex_alternation() -> None:
+    """Regression guard: " | " as a regex is an alternation that matches every space.
+
+    Matching must be plain substring, or this pattern would drop every post.
+    """
+    from mornings.fetch import excluded_title_pattern
+
+    assert excluded_title_pattern("An expert workflow | Nick Baumann", (" | ",)) == " | "
+    # A title with spaces but no pipe must survive.
+    assert excluded_title_pattern("How to make people care about your startup", (" | ",)) is None
+
+
+def test_emoji_pattern_matches_the_variation_selector_form() -> None:
+    """Substack writes 🎙️ with a trailing variation selector; the bare 🎙 must match."""
+    from mornings.fetch import excluded_title_pattern
+
+    assert excluded_title_pattern("🎙️ How I AI: something", ("🎙",)) == "🎙"
+
+
+def test_empty_exclude_list_keeps_everything() -> None:
+    from mornings.fetch import excluded_title_pattern
+
+    assert excluded_title_pattern("Any title at all", ()) is None

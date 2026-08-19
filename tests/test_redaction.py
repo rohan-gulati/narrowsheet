@@ -97,3 +97,73 @@ def test_inline_private_url_in_yaml_is_rejected(tmp_path) -> None:
 def test_shipped_feeds_yaml_has_no_private_urls() -> None:
     text = Path("feeds.yaml").read_text(encoding="utf-8")
     assert "/feed/private/" not in text
+
+
+# ------------------------------------------------------- exclude_titles / min_words
+
+
+def test_exclude_titles_and_min_words_parse(tmp_path) -> None:
+    path = tmp_path / "feeds.yaml"
+    path.write_text(
+        "publications:\n"
+        '  - name: "Lenny"\n'
+        "    type: public\n"
+        '    url: "https://example.com/feed"\n'
+        "    exclude_titles:\n"
+        '      - "🎙"\n'
+        '      - " | "\n'
+        "    min_words: 700\n",
+        encoding="utf-8",
+    )
+    pub = load_config(path).publications[0]
+    assert pub.exclude_titles == ("🎙", " | ")
+    assert pub.min_words == 700
+
+
+def test_publication_without_filters_defaults_to_none(tmp_path) -> None:
+    path = tmp_path / "feeds.yaml"
+    path.write_text(
+        "publications:\n"
+        '  - name: "Plain"\n'
+        "    type: public\n"
+        '    url: "https://example.com/feed"\n',
+        encoding="utf-8",
+    )
+    pub = load_config(path).publications[0]
+    assert pub.exclude_titles == ()
+    assert pub.min_words is None
+
+
+def test_exclude_titles_as_a_bare_string_is_rejected(tmp_path) -> None:
+    """A YAML string would iterate character by character and drop nearly everything."""
+    path = tmp_path / "feeds.yaml"
+    path.write_text(
+        "publications:\n"
+        '  - name: "Oops"\n'
+        "    type: public\n"
+        '    url: "https://example.com/feed"\n'
+        '    exclude_titles: "How I AI"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="must be a list"):
+        load_config(path)
+
+
+def test_negative_min_words_is_rejected(tmp_path) -> None:
+    path = tmp_path / "feeds.yaml"
+    path.write_text(
+        "publications:\n"
+        '  - name: "Oops"\n'
+        "    type: public\n"
+        '    url: "https://example.com/feed"\n'
+        "    min_words: -5\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="cannot be negative"):
+        load_config(path)
+
+
+def test_shipped_feeds_yaml_uses_a_weekly_window() -> None:
+    """The 26h window silently dropped anything older than a day."""
+    settings = load_config("feeds.yaml").settings
+    assert settings.lookback_hours >= 168

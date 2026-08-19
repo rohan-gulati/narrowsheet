@@ -55,6 +55,18 @@ def _entry_published(entry: object) -> datetime | None:
     return None
 
 
+def excluded_title_pattern(title: str, patterns: tuple[str, ...]) -> str | None:
+    """Return the pattern that excludes this title, or None.
+
+    Plain case-insensitive substring matching, not regex — see Publication.exclude_titles.
+    """
+    lowered = title.lower()
+    for pattern in patterns:
+        if pattern.lower() in lowered:
+            return pattern
+    return None
+
+
 def _fetch_feed(pub: Publication, url: str, client: httpx.Client) -> list[Post]:
     response = client.get(url)
     response.raise_for_status()
@@ -69,11 +81,16 @@ def _fetch_feed(pub: Publication, url: str, client: httpx.Client) -> list[Post]:
         guid = getattr(entry, "id", "") or link
         if not guid:
             continue
+        title = (getattr(entry, "title", "") or "Untitled").strip()
+        matched = excluded_title_pattern(title, pub.exclude_titles)
+        if matched:
+            log.info("%s: skipped %r (title matches %r)", pub.name, title[:70], matched)
+            continue
         posts.append(
             Post(
                 guid=guid,
                 publication=pub.name,
-                title=(getattr(entry, "title", "") or "Untitled").strip(),
+                title=title,
                 published=published,
                 html=_entry_html(entry),
                 link=link,

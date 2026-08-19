@@ -62,6 +62,14 @@ class Publication:
     url: str | None = None
     url_env: str | None = None
     match_from: str | None = None
+    # Case-insensitive substrings; a post whose title contains any of them is skipped.
+    # Deliberately substrings and not regexes: the most useful pattern here is " | "
+    # (Substack's guest-interview title convention), and as a regex the pipe is an
+    # alternation metacharacter that would quietly match every space instead.
+    exclude_titles: tuple[str, ...] = ()
+    # Posts whose cleaned body falls under this are skipped entirely. Catches
+    # podcast show-note stubs, whose real content is audio the sanitizer strips.
+    min_words: int | None = None
 
 
 @dataclass(frozen=True)
@@ -93,12 +101,29 @@ def _publication(raw: dict[str, Any], index: int) -> Publication:
         raise ValueError(f"{name}: private feed URLs are credentials; use 'url_env' instead")
     if kind == "email" and not raw.get("match_from"):
         raise ValueError(f"{name}: email publications need a 'match_from' sender pattern")
+
+    raw_excludes = raw.get("exclude_titles") or []
+    if isinstance(raw_excludes, str):
+        raise ValueError(f"{name}: 'exclude_titles' must be a list, not a single string")
+    excludes = tuple(str(pattern) for pattern in raw_excludes if str(pattern).strip())
+
+    min_words = raw.get("min_words")
+    if min_words is not None:
+        try:
+            min_words = int(min_words)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name}: 'min_words' must be a whole number") from exc
+        if min_words < 0:
+            raise ValueError(f"{name}: 'min_words' cannot be negative")
+
     return Publication(
         name=name,
         type=kind,
         url=raw.get("url"),
         url_env=raw.get("url_env"),
         match_from=raw.get("match_from"),
+        exclude_titles=excludes,
+        min_words=min_words,
     )
 
 

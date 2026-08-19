@@ -19,6 +19,17 @@ publications:
   - name: "Lenny's Newsletter"
     type: public
     url: "https://www.lennysnewsletter.com/feed"
+    # Lenny publishes podcast episodes as short show-note posts; the real content is
+    # audio, which the sanitizer strips, so they arrive as near-empty chapters.
+    # Matched as case-insensitive substrings, not regexes -- " | " is his
+    # guest-interview title convention and would be an alternation as a regex.
+    exclude_titles:
+      - "🎙"        # "🎙️ How I AI: ..." episode roundups
+      - "How I AI"  # the same series, in case the emoji is dropped
+      - " | "       # per-episode write-ups, titled "... | Guest Name"
+    # Backstop for show-note stubs that dodge the title patterns. His written
+    # essays run 2,000+ words; the podcast posts are 324-668.
+    min_words: 700
 
   - name: "Polity and Policy"
     type: public
@@ -74,7 +85,12 @@ publications:
   #   match_from: "@examplepaid.substack.com"
 
 settings:
-  lookback_hours: 26
+  # A week, not a day. Most of these publications post weekly or slower, so a
+  # 26-hour window only ever caught 4 of 13 of them -- and anything that fell
+  # outside it was missed permanently, since the window moves on. Widening is safe
+  # because state/seen.json already prevents re-sends: this is an "unread from the
+  # past week" queue, not a "published in the last week" one.
+  lookback_hours: 168
   max_words_per_issue: 25000
   skip_if_empty: true
   imap_label: "kindle"

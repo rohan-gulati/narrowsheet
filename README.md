@@ -48,8 +48,17 @@ publications:
     type: email
     match_from: "@examplepaid.substack.com"
 
+  # Any publication can filter its own posts.
+  - name: "Noisy Publication"
+    type: public
+    url: "https://example.com/feed"
+    exclude_titles:        # case-insensitive substrings, NOT regexes
+      - "🎙"
+      - " | "
+    min_words: 700         # drop posts whose cleaned body is shorter than this
+
 settings:
-  lookback_hours: 26          # slightly over a day, so a late run misses nothing
+  lookback_hours: 168         # a week of unread, not a day; see below
   max_words_per_issue: 25000  # a soft cap; see below
   skip_if_empty: true
   imap_label: "kindle"
@@ -121,6 +130,33 @@ python3.11 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 ```
 
 ## Behaviour worth knowing
+
+**What gets into an issue.** Two filters, in `select_recent` (`mornings/fetch.py`):
+a post must be published inside `lookback_hours`, and its GUID must not already be
+in `state/seen.json`.
+
+This is a queue of *unread*, not of *recent*. The window is a week rather than a day
+because most publications post weekly or slower — a 26-hour window only ever caught
+4 of 13 of them, and anything falling outside it was missed permanently, since the
+window moves on and `seen.json` only prevents duplicates, it never recovers a miss.
+Widening the window cannot cause re-sends, because `seen.json` still does the
+deduping; it only stops posts being dropped on the floor. Widen it further if you
+want a longer catch-up tail.
+
+**Per-publication filters.** `exclude_titles` drops posts whose title contains any
+of the listed substrings; `min_words` drops posts whose cleaned body is too short.
+Both are per-publication, and useful for newsletters that mix long-form writing with
+podcast show notes — the audio is stripped by the sanitizer, so those posts otherwise
+arrive as near-empty chapters.
+
+`exclude_titles` entries are **case-insensitive substrings, not regexes**. That is
+deliberate: the most useful pattern is `" | "`, Substack's guest-interview title
+convention, and as a regex the pipe is an alternation operator that would match
+every space and drop everything.
+
+`min_words` deliberately does not apply to truncated posts. Those are short because
+the publisher paywalled the feed, not because they're filler, and they are already
+handled by being listed on the cover as a preview instead of becoming a chapter.
 
 **Truncated paid posts.** Substack's paid feeds send a partial body ending in a
 "Read more" stub. Those are detected, kept out of the chapter list, and listed on
