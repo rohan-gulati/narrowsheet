@@ -24,6 +24,14 @@ from .deliver import (
     send_issue,
 )
 from .epub import build_epub, issue_title
+from .feeds import (
+    FeedError,
+    add_publication,
+    apply_issue,
+    list_publications,
+    remove_publication,
+    set_enabled,
+)
 from .fetch import fetch_all, fetch_single, select_recent
 
 log = logging.getLogger("mornings")
@@ -148,6 +156,35 @@ def command_preview(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_feeds(args: argparse.Namespace) -> int:
+    """Manage feeds.yaml. Output is markdown so the Action can post it verbatim."""
+    path = Path(args.config)
+    try:
+        if args.action == "apply-issue":
+            # Body arrives through the environment, never through argv or a shell.
+            print(apply_issue(path, os.environ.get("ISSUE_BODY", "")))
+            return 0
+        if args.action == "list":
+            print(list_publications(path))
+            return 0
+        if args.action == "add":
+            message, report = add_publication(path, args.target, name=args.name)
+            print(message)
+            print()
+            print("\n".join(report.summary_lines()))
+            return 0
+        if args.action == "remove":
+            print(remove_publication(path, args.target))
+            return 0
+        if args.action in ("pause", "resume"):
+            print(set_enabled(path, args.target, enabled=args.action == "resume"))
+            return 0
+    except FeedError as exc:
+        print(f"Could not do that: {exc}")
+        return 1
+    raise ValueError(f"unknown action {args.action!r}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mornings", description=issue_title(date.today()))
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -165,6 +202,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="override settings.lookback_hours, for iterating on a fuller issue",
     )
     run_parser.set_defaults(func=command_run)
+
+    feeds_parser = sub.add_parser("feeds", help="manage the publication list")
+    feeds_parser.add_argument(
+        "action",
+        choices=["add", "remove", "pause", "resume", "list", "apply-issue"],
+    )
+    feeds_parser.add_argument(
+        "target",
+        nargs="?",
+        default="",
+        help="a Substack URL when adding, otherwise the publication name",
+    )
+    feeds_parser.add_argument("--name", help="override the name taken from the feed")
+    feeds_parser.add_argument("--config", default=DEFAULT_CONFIG)
+    feeds_parser.set_defaults(func=command_feeds)
 
     preview_parser = sub.add_parser("preview", help="clean a single post and dump the HTML")
     preview_parser.add_argument("url")

@@ -22,6 +22,7 @@ same posts the next morning rather than losing them.
 | `mornings/clean.py` | Strips Substack chrome, embeds greyscale images, detects truncated posts |
 | `mornings/epub.py` | Cover image, contents page, chapters, NCX + nav, stylesheet |
 | `mornings/deliver.py` | SMTP send with retries, ntfy notification, `state/seen.json` |
+| `mornings/feeds.py` | Resolves a link to a feed and edits `feeds.yaml` without losing its comments |
 | `mornings/__main__.py` | CLI |
 
 ## Setup
@@ -98,6 +99,39 @@ silently drops mail from unapproved senders.
 Create a Gmail filter that applies the label `kindle` to the publications you
 want, and generate an app password for IMAP. The label name is configurable via
 `settings.imap_label`.
+
+## Managing subscriptions
+
+You do not need to edit `feeds.yaml` by hand.
+
+**From GitHub (works on the phone app):** open a new issue, pick the *Manage a
+subscription* template, choose add / remove / pause / resume, and paste a link. An
+Action resolves the feed, applies the change, commits it, replies with what it found,
+and closes the issue.
+
+Any link works when adding — the homepage, a post you liked, or the feed itself. The
+publication's name comes from the feed rather than the URL, which is how
+`nickcollins1953` ends up as "Maritime Trade History". Before saving, it reports how
+often the publication posts and what share of recent posts arrive paywalled, so you
+find out up front when something will mostly show as previews.
+
+Only the repository owner can drive that workflow — this repo is public, so the job is
+gated on the issue author.
+
+**From the terminal:**
+
+```bash
+python -m mornings feeds add https://www.noahpinion.blog/p/some-post
+python -m mornings feeds pause "Lenny's Newsletter"
+python -m mornings feeds resume "Lenny's Newsletter"
+python -m mornings feeds remove "Seymour Hersh"
+python -m mornings feeds list
+```
+
+Pausing keeps the entry and its filters in the file and skips it at fetch time, so you
+can mute a publication without losing its `exclude_titles` and `min_words` config.
+
+Edits go through a round-trip YAML loader, so the comments in `feeds.yaml` survive.
 
 ## Schedule
 

@@ -1,0 +1,33 @@
+name: Manage a subscription
+description: Add, remove, pause or resume a publication in the daily issue.
+title: "feed: "
+labels: ["manage-feed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste a Substack link and the rest is worked out for you — the feed URL, the
+        publication's real name, and how much of it arrives paywalled.
+
+  - type: dropdown
+    id: action
+    attributes:
+      label: Action
+      options:
+        - add
+        - remove
+        - pause
+        - resume
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: target
+    attributes:
+      label: Substack link (to add) or publication name (to remove, pause or resume)
+      description: >
+        Any link works when adding — the homepage, a post you liked, or the feed itself.
+      placeholder: https://www.noahpinion.blog/p/some-post
+    validations:
+      required: true

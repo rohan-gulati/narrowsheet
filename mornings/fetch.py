@@ -257,8 +257,13 @@ def fetch_email_posts(publications: list[Publication], settings: Settings) -> li
 
 def fetch_all(config: Config) -> list[Post]:
     """Fetch every configured source. A failing source is logged, never fatal."""
-    feed_pubs = [p for p in config.publications if p.type in ("public", "private")]
-    email_pubs = [p for p in config.publications if p.type == "email"]
+    active = [p for p in config.publications if p.enabled]
+    paused = [p.name for p in config.publications if not p.enabled]
+    if paused:
+        log.info("skipping %d paused publication(s): %s", len(paused), ", ".join(paused))
+
+    feed_pubs = [p for p in active if p.type in ("public", "private")]
+    email_pubs = [p for p in active if p.type == "email"]
 
     posts: list[Post] = []
     if feed_pubs:

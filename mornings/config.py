@@ -62,6 +62,8 @@ class Publication:
     url: str | None = None
     url_env: str | None = None
     match_from: str | None = None
+    # Pausing keeps the entry and its filters in the file instead of deleting it.
+    enabled: bool = True
     # Case-insensitive substrings; a post whose title contains any of them is skipped.
     # Deliberately substrings and not regexes: the most useful pattern here is " | "
     # (Substack's guest-interview title convention), and as a regex the pipe is an
@@ -119,6 +121,7 @@ def _publication(raw: dict[str, Any], index: int) -> Publication:
     return Publication(
         name=name,
         type=kind,
+        enabled=bool(raw.get("enabled", True)),
         url=raw.get("url"),
         url_env=raw.get("url_env"),
         match_from=raw.get("match_from"),
