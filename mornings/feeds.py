@@ -24,7 +24,11 @@ from .clean import clean_html
 log = logging.getLogger(__name__)
 
 TIMEOUT = 20
-USER_AGENT = "Mozilla/5.0 (compatible; mornings/0.1)"
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+)
+PROFILE_API = "https://substack.com/api/v1/user/{handle}/public_profile"
 
 _RSS_LINK = re.compile(
     r"""<link[^>]+type=["']application/rss\+xml["'][^>]*>""", re.IGNORECASE
@@ -91,6 +95,53 @@ def _parse_feed(content: bytes) -> feedparser.FeedParserDict | None:
     return None
 
 
+_PROFILE_URL = re.compile(
+    r"^https?://(?:www\.)?substack\.com/@([A-Za-z0-9_-]+)", re.IGNORECASE
+)
+
+
+def profile_handle(url: str) -> str | None:
+    """Return the handle from a substack.com/@handle profile link, if it is one."""
+    match = _PROFILE_URL.match((url or "").strip())
+    return match.group(1) if match else None
+
+
+def _resolve_profile(handle: str, client: httpx.Client) -> str | None:
+    """Turn a profile handle into that person's publication feed.
+
+    Tried in this order on purpose. `<handle>.substack.com` is a guess, but it is
+    right most of the time and it never touches substack.com itself — which matters,
+    because substack.com served a GitHub Actions runner a non-2xx where it serves a
+    desktop browser a 200. The API call is the fallback for when the handle and the
+    publication subdomain differ.
+    """
+    guess = f"https://{handle}.substack.com/feed"
+    try:
+        if _parse_feed(_get(guess, client).content) is not None:
+            return guess
+    except Exception:
+        log.debug("handle guess %s did not resolve", guess)
+
+    try:
+        profile = _get(PROFILE_API.format(handle=handle), client).json()
+    except Exception:
+        log.debug("profile API lookup failed for %s", handle)
+        return None
+
+    publication = profile.get("primaryPublication") or {}
+    if not publication:
+        users = profile.get("publicationUsers") or []
+        publication = (users[0].get("publication") or {}) if users else {}
+
+    custom = (publication.get("custom_domain") or "").strip()
+    subdomain = (publication.get("subdomain") or "").strip()
+    if custom:
+        return f"https://{custom}/feed"
+    if subdomain:
+        return f"https://{subdomain}.substack.com/feed"
+    return None
+
+
 def resolve_feed(url: str, client: httpx.Client | None = None) -> tuple[str, object]:
     """Return (feed_url, parsed_feed) for any publication, post, or feed URL.
 
@@ -105,8 +156,29 @@ def resolve_feed(url: str, client: httpx.Client | None = None) -> tuple[str, obj
         timeout=TIMEOUT, follow_redirects=True, headers={"User-Agent": USER_AGENT}
     )
     try:
+        handle = profile_handle(url)
+        if handle:
+            # A profile page lists a person, not a publication, and carries no feed.
+            feed = _resolve_profile(handle, client)
+            if feed is None:
+                raise FeedError(
+                    f"{url} is a Substack profile, and I could not find a publication "
+                    f"behind it. If @{handle} writes a newsletter, paste a link to the "
+                    "newsletter itself instead of the profile."
+                )
+            parsed = _parse_feed(_get(feed, client).content)
+            if parsed is None:
+                raise FeedError(f"the feed for @{handle} at {feed} had no entries")
+            return feed, parsed
+
         try:
             response = _get(url, client)
+        except httpx.HTTPStatusError as exc:
+            raise FeedError(
+                f"{url} returned HTTP {exc.response.status_code}. If that is a "
+                "Substack profile or a page behind a login, paste the publication's "
+                "own address instead."
+            ) from exc
         except Exception as exc:
             raise FeedError(f"could not fetch {url} ({type(exc).__name__})") from exc
 
@@ -302,11 +374,18 @@ def list_publications(path: Path) -> str:
 VALID_ACTIONS = ("add", "remove", "pause", "resume")
 
 
-def parse_issue_form(body: str) -> tuple[str, str]:
+_URL_IN_TEXT = re.compile(r"https?://\S+")
+
+
+def parse_issue_form(body: str, title: str = "") -> tuple[str, str]:
     """Pull (action, target) out of a GitHub issue-form body.
 
     Issue forms render as "### <label>" followed by the value, and an empty optional
     field renders as the literal "_No response_".
+
+    The title is a fallback source for the link. On a phone the title box is what the
+    cursor lands in first, so a pasted link often ends up there instead of in the
+    field — which is exactly what happened the first time this was used.
     """
     fields: dict[str, str] = {}
     for section in re.split(r"^###\s+", body or "", flags=re.MULTILINE):
@@ -320,16 +399,22 @@ def parse_issue_form(body: str) -> tuple[str, str]:
         (v for k, v in fields.items() if k.startswith("substack link")), ""
     ).strip()
 
+    if not target or target == "_No response_":
+        found = _URL_IN_TEXT.search(title or "")
+        target = found.group(0).strip() if found else ""
+
     if action not in VALID_ACTIONS:
         raise FeedError(f"unrecognised action: {action or '(none)'}")
-    if not target or target == "_No response_":
-        raise FeedError("no link or publication name was given")
+    if not target:
+        raise FeedError(
+            "no link or publication name was given — put it in the Substack link box"
+        )
     return action, target
 
 
-def apply_issue(path: Path, body: str) -> str:
+def apply_issue(path: Path, body: str, title: str = "") -> str:
     """Run whatever an issue form asked for, returning markdown for the reply."""
-    action, target = parse_issue_form(body)
+    action, target = parse_issue_form(body, title)
     if action == "add":
         message, report = add_publication(path, target)
         return message + "\n\n" + "\n".join(report.summary_lines())

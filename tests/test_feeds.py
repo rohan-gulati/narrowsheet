@@ -296,3 +296,119 @@ def test_apply_issue_end_to_end(
     result = apply_issue(config_file, ISSUE_BODY)
     assert "Added **New Publication**" in result
     assert load_config(config_file).publications[-1].name == "New Publication"
+
+
+# ------------------------------------------------------- substack profile links
+
+PROFILE_JSON = (
+    '{"name": "Someone", "handle": "someone",'
+    ' "primaryPublication": {"name": "Their Newsletter", "subdomain": "theirs",'
+    ' "custom_domain": null}}'
+)
+
+
+def test_profile_handle_extraction() -> None:
+    from mornings.feeds import profile_handle
+
+    assert profile_handle("https://substack.com/@ashwinivaishnaw") == "ashwinivaishnaw"
+    # Shared from the Substack iOS app, which appends tracking params.
+    assert (
+        profile_handle("https://substack.com/@ashwinivaishnaw?r=8dhyo&utm_medium=ios")
+        == "ashwinivaishnaw"
+    )
+    assert profile_handle("https://www.substack.com/@someone/note/abc") == "someone"
+    assert profile_handle("https://www.noahpinion.blog/p/a-post") is None
+    assert profile_handle("") is None
+
+
+def test_profile_resolves_via_the_handle_subdomain() -> None:
+    """Regression: substack.com/@handle used to fall through to substack.com/feed, which 404s.
+
+    The handle guess is tried first because it never touches substack.com, which
+    served a GitHub Actions runner a non-2xx where a browser gets a 200.
+    """
+    client = FakeClient({"https://someone.substack.com/feed": RSS})
+    url, parsed = resolve_feed("https://substack.com/@someone", client)
+    assert url == "https://someone.substack.com/feed"
+    assert parsed.feed.title == "Example Publication"
+    assert "https://substack.com/feed" not in client.requested
+    assert "https://substack.com/@someone" not in client.requested
+
+
+class ProfileClient(FakeClient):
+    """Serves the profile API as JSON, like httpx does."""
+
+    def get(self, url: str) -> FakeResponse:
+        response = super().get(url)
+        import json as _json
+
+        response.json = lambda: _json.loads(response.text)  # type: ignore[attr-defined]
+        return response
+
+
+def test_profile_falls_back_to_the_api_when_the_handle_guess_misses() -> None:
+    """A handle and its publication subdomain do not always match."""
+    client = ProfileClient(
+        {
+            "https://substack.com/api/v1/user/someone/public_profile": PROFILE_JSON,
+            "https://theirs.substack.com/feed": RSS,
+        }
+    )
+    url, _ = resolve_feed("https://substack.com/@someone", client)
+    assert url == "https://theirs.substack.com/feed"
+
+
+def test_profile_with_no_publication_says_so_plainly() -> None:
+    client = ProfileClient(
+        {
+            "https://substack.com/api/v1/user/nobody/public_profile":
+                '{"name": "Nobody", "primaryPublication": null, "publicationUsers": []}'
+        }
+    )
+    with pytest.raises(FeedError, match="is a Substack profile"):
+        resolve_feed("https://substack.com/@nobody", client)
+
+
+def test_http_error_reports_the_status_code() -> None:
+    """'(HTTPStatusError)' told the user nothing about what went wrong."""
+    import httpx
+
+    class Failing(FakeClient):
+        def get(self, url: str) -> FakeResponse:
+            request = httpx.Request("GET", url)
+            response = httpx.Response(403, request=request)
+            raise httpx.HTTPStatusError("403", request=request, response=response)
+
+    with pytest.raises(FeedError, match="returned HTTP 403"):
+        resolve_feed("https://example.com/blocked", Failing({}))
+
+
+def test_link_pasted_into_the_title_still_works() -> None:
+    """What actually happened: on a phone the cursor lands in the title box first."""
+    body = (
+        "### Substack link\n\n_No response_\n\n### Action\n\nadd\n"
+    )
+    action, target = parse_issue_form(body, title="https://substack.com/@ashwinivaishnaw")
+    assert action == "add"
+    assert target == "https://substack.com/@ashwinivaishnaw"
+
+
+def test_title_link_keeps_its_tracking_params() -> None:
+    action, target = parse_issue_form(
+        "### Substack link\n\n_No response_\n\n### Action\n\nadd\n",
+        title="feed: https://substack.com/@x?r=8dhyo&utm_medium=ios",
+    )
+    assert target == "https://substack.com/@x?r=8dhyo&utm_medium=ios"
+
+
+def test_the_field_wins_when_both_are_filled() -> None:
+    _, target = parse_issue_form(ISSUE_BODY, title="https://wrong.example.com/")
+    assert target == "https://new.example.com/p/a-post"
+
+
+def test_no_link_anywhere_still_errors() -> None:
+    with pytest.raises(FeedError, match="Substack link box"):
+        parse_issue_form(
+            "### Substack link\n\n_No response_\n\n### Action\n\nadd\n",
+            title="feed: nothing useful here",
+        )

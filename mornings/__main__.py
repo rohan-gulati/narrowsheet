@@ -162,7 +162,13 @@ def command_feeds(args: argparse.Namespace) -> int:
     try:
         if args.action == "apply-issue":
             # Body arrives through the environment, never through argv or a shell.
-            print(apply_issue(path, os.environ.get("ISSUE_BODY", "")))
+            print(
+                apply_issue(
+                    path,
+                    os.environ.get("ISSUE_BODY", ""),
+                    os.environ.get("ISSUE_TITLE", ""),
+                )
+            )
             return 0
         if args.action == "list":
             print(list_publications(path))
