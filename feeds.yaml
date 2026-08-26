@@ -84,6 +84,10 @@ publications:
   #   type: email
   #   match_from: "@examplepaid.substack.com"
 
+  - name: "Ashwini Vaishnaw"
+    type: public
+    url: "https://ashwinivaishnaw.substack.com/feed"
+
 settings:
   # A week, not a day. Most of these publications post weekly or slower, so a
   # 26-hour window only ever caught 4 of 13 of them -- and anything that fell
