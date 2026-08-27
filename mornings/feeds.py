@@ -142,14 +142,27 @@ def _resolve_profile(handle: str, client: httpx.Client) -> str | None:
     return None
 
 
+FEED_PATHS = ("/feed", "/rss", "/feed.xml", "/atom.xml", "/index.xml", "/rss.xml")
+
+_FEEDISH = re.compile(r"(/feed|/rss|\.xml|/atom)/?$", re.IGNORECASE)
+
+
+def _looks_like_a_feed_path(url: str) -> bool:
+    return bool(_FEEDISH.search(urlparse(url).path or ""))
+
+
 def resolve_feed(url: str, client: httpx.Client | None = None) -> tuple[str, object]:
     """Return (feed_url, parsed_feed) for any publication, post, or feed URL.
 
-    Order matters, and each step is here because a real URL shape needs it:
-      1. The URL may already be a feed. Appending /feed to it yields /feed/feed.
-      2. RSS autodiscovery in the page <head>. Works for homepages, post URLs and
-         custom domains alike, and returns a relative href to join against the origin.
-      3. <origin>/feed, which covers non-Substack blogs whose pages omit the link tag.
+    Feed endpoints are tried before the page itself is ever fetched. That ordering is
+    not an optimisation: Substack serves HTTP 403 to datacenter IPs for HTML pages,
+    so fetching a post URL from a GitHub Actions runner fails even though the same
+    URL returns 200 from a laptop. Feed endpoints are not blocked the same way --
+    the daily pipeline reads a dozen of them from Actions every morning. Deriving
+    <origin>/feed from the host sidesteps the block entirely.
+
+    HTML autodiscovery is kept as a last resort for sites that publish their feed at
+    some other path, and it is the only step that needs the page.
     """
     owns_client = client is None
     client = client or httpx.Client(
@@ -171,42 +184,50 @@ def resolve_feed(url: str, client: httpx.Client | None = None) -> tuple[str, obj
                 raise FeedError(f"the feed for @{handle} at {feed} had no entries")
             return feed, parsed
 
+        parts = urlparse(url)
+        if not parts.scheme or not parts.netloc:
+            raise FeedError(f"{url!r} does not look like a link")
+        origin = f"{parts.scheme}://{parts.netloc}"
+
+        candidates: list[str] = []
+        if _looks_like_a_feed_path(url):
+            candidates.append(url)
+        candidates += [f"{origin}{path}" for path in FEED_PATHS]
+
+        statuses: list[int] = []
+        for candidate in dict.fromkeys(candidates):
+            try:
+                parsed = _parse_feed(_get(candidate, client).content)
+            except httpx.HTTPStatusError as exc:
+                statuses.append(exc.response.status_code)
+                continue
+            except Exception:
+                continue
+            if parsed is not None:
+                return candidate, parsed
+
+        # Last resort, and the only step that needs the page itself.
         try:
             response = _get(url, client)
-        except httpx.HTTPStatusError as exc:
-            raise FeedError(
-                f"{url} returned HTTP {exc.response.status_code}. If that is a "
-                "Substack profile or a page behind a login, paste the publication's "
-                "own address instead."
-            ) from exc
-        except Exception as exc:
-            raise FeedError(f"could not fetch {url} ({type(exc).__name__})") from exc
-
-        direct = _parse_feed(response.content)
-        if direct is not None:
-            return str(response.url), direct
-
-        match = _RSS_LINK.search(response.text)
-        if match:
-            href = _HREF.search(match.group(0))
-            if href:
-                candidate = urljoin(str(response.url), href.group(1))
-                try:
-                    parsed = _parse_feed(_get(candidate, client).content)
+            match = _RSS_LINK.search(response.text)
+            if match:
+                href = _HREF.search(match.group(0))
+                if href:
+                    discovered = urljoin(str(response.url), href.group(1))
+                    parsed = _parse_feed(_get(discovered, client).content)
                     if parsed is not None:
-                        return candidate, parsed
-                except Exception:
-                    log.debug("autodiscovered feed %s did not parse", candidate)
-
-        origin = urlparse(str(response.url))
-        fallback = f"{origin.scheme}://{origin.netloc}/feed"
-        try:
-            parsed = _parse_feed(_get(fallback, client).content)
-            if parsed is not None:
-                return fallback, parsed
+                        return discovered, parsed
+        except httpx.HTTPStatusError as exc:
+            statuses.append(exc.response.status_code)
         except Exception:
-            log.debug("fallback feed %s did not parse", fallback)
+            log.debug("autodiscovery failed for %s", url)
 
+        if 403 in statuses or 429 in statuses:
+            raise FeedError(
+                f"no feed found at {origin}, and the site returned HTTP "
+                f"{403 if 403 in statuses else 429} to this runner. Try pasting the "
+                "publication's feed address directly, usually <site>/feed."
+            )
         raise FeedError(f"no usable RSS feed found for {url}")
     finally:
         if owns_client:

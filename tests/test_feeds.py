@@ -146,7 +146,8 @@ def test_unresolvable_url_raises_rather_than_writing_junk() -> None:
 
 
 def test_unreachable_url_raises() -> None:
-    with pytest.raises(FeedError, match="could not fetch"):
+    """Nothing resolves and the page cannot be read either."""
+    with pytest.raises(FeedError, match="no usable RSS feed"):
         resolve_feed("https://example.com/", FakeClient({}))
 
 
@@ -412,3 +413,83 @@ def test_no_link_anywhere_still_errors() -> None:
             "### Substack link\n\n_No response_\n\n### Action\n\nadd\n",
             title="feed: nothing useful here",
         )
+
+
+# ------------------------------------------------- feeds tried before the page
+
+def test_post_url_never_fetches_the_page() -> None:
+    """Regression for the HTTP 403 on raydalio.substack.com.
+
+    Substack serves 403 to datacenter IPs for HTML pages, so a GitHub Actions runner
+    could not fetch a post URL that returns 200 from a laptop. Feed endpoints are not
+    blocked, so <origin>/feed is tried first and the page is never touched.
+    """
+    client = FakeClient({"https://pub.substack.com/feed": RSS})
+    url, _ = resolve_feed("https://pub.substack.com/p/some-long-post-slug", client)
+    assert url == "https://pub.substack.com/feed"
+    assert client.requested == ["https://pub.substack.com/feed"]
+
+
+def test_resolution_survives_a_host_that_403s_every_html_page() -> None:
+    import httpx
+
+    class BlockedHtml(FakeClient):
+        def get(self, url: str) -> FakeResponse:
+            self.requested.append(url)
+            if url.endswith("/feed"):
+                return FakeResponse(url, RSS.encode())
+            request = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError(
+                "403", request=request, response=httpx.Response(403, request=request)
+            )
+
+    url, _ = resolve_feed("https://pub.substack.com/p/x", BlockedHtml({}))
+    assert url == "https://pub.substack.com/feed"
+
+
+def test_a_feed_at_a_nonstandard_path_is_preferred_when_pasted() -> None:
+    """If the pasted URL is itself feed-shaped, honour it over a guessed /feed."""
+    other = RSS.replace("Example Publication", "The Pasted One")
+    client = FakeClient(
+        {"https://example.com/rss.xml": other, "https://example.com/feed": RSS}
+    )
+    url, parsed = resolve_feed("https://example.com/rss.xml", client)
+    assert url == "https://example.com/rss.xml"
+    assert parsed.feed.title == "The Pasted One"
+
+
+def test_alternate_feed_paths_are_tried() -> None:
+    client = FakeClient({"https://example.com/atom.xml": RSS})
+    url, _ = resolve_feed("https://example.com/", client)
+    assert url == "https://example.com/atom.xml"
+
+
+def test_autodiscovery_still_works_for_an_unusual_feed_path() -> None:
+    """The page is only fetched once the cheap guesses are exhausted."""
+    client = FakeClient(
+        {
+            "https://example.com/": PAGE_WITH_LINK.replace("/feed", "/blog/rss-2.0"),
+            "https://example.com/blog/rss-2.0": RSS,
+        }
+    )
+    url, _ = resolve_feed("https://example.com/", client)
+    assert url == "https://example.com/blog/rss-2.0"
+
+
+def test_a_blocking_host_says_so_rather_than_shrugging() -> None:
+    import httpx
+
+    class AllBlocked(FakeClient):
+        def get(self, url: str) -> FakeResponse:
+            request = httpx.Request("GET", url)
+            raise httpx.HTTPStatusError(
+                "403", request=request, response=httpx.Response(403, request=request)
+            )
+
+    with pytest.raises(FeedError, match="HTTP 403"):
+        resolve_feed("https://blocked.example.com/p/x", AllBlocked({}))
+
+
+def test_a_non_url_is_rejected_clearly() -> None:
+    with pytest.raises(FeedError, match="does not look like a link"):
+        resolve_feed("Lenny's Newsletter", FakeClient({}))
