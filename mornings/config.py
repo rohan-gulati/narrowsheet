@@ -80,6 +80,14 @@ class Settings:
     max_words_per_issue: int = 25000
     skip_if_empty: bool = True
     imap_label: str = "kindle"
+    # An issue is only sent once this many posts have piled up. Below it the run
+    # holds: nothing is built, sent or recorded, so the same posts are picked up
+    # again next time and the pile grows. A daily cron with a threshold gives a
+    # magazine rhythm without pinning it to a fixed publishing day.
+    min_posts_per_issue: int = 1
+    # ...unless the oldest waiting post has been held this long, at which point the
+    # issue goes out short rather than leaving a post to rot in the queue.
+    max_hold_days: int = 14
 
 
 @dataclass(frozen=True)
@@ -140,7 +148,31 @@ def load_config(path: str | Path) -> Config:
     raw_settings = data.get("settings") or {}
     known = {f: raw_settings[f] for f in Settings.__dataclass_fields__ if f in raw_settings}
     settings = Settings(**known)
+    _check_hold_window(settings)
     return Config(publications=publications, settings=settings)
+
+
+def _check_hold_window(settings: Settings) -> None:
+    """Warn when a held post would age out of the lookback window before it ships.
+
+    select_recent drops anything published before now - lookback_hours, and
+    state/seen.json only prevents duplicates -- it never recovers a miss. So a post
+    held longer than the window is lost silently, and only shows up as an absence
+    weeks later. The window has to outlast the hold ceiling.
+    """
+    if settings.min_posts_per_issue <= 1:
+        return
+    needed = settings.max_hold_days * 24
+    if settings.lookback_hours < needed:
+        logging.getLogger(__name__).warning(
+            "lookback_hours is %d but posts can be held for %d days (%dh); posts held "
+            "longer than the window will be dropped, not delayed. Raise lookback_hours "
+            "to at least %d.",
+            settings.lookback_hours,
+            settings.max_hold_days,
+            needed,
+            needed,
+        )
 
 
 def resolve_feed_url(pub: Publication) -> str | None:

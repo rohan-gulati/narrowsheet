@@ -2,10 +2,18 @@ name: Morning Read
 
 on:
   schedule:
-    # 00:00 UTC = 05:30 IST. GitHub's scheduler can lag by a few minutes at busy
-    # times; the 26h lookback window means a late run never drops a post.
+    # Runs every morning, but does not send every morning. The job only ships an
+    # issue once settings.min_posts_per_issue have piled up; otherwise it holds and
+    # tries again tomorrow. Waking daily is what lets it notice the moment the pile
+    # is big enough, rather than pinning the magazine to a fixed publishing day.
+    # 00:00 UTC = 05:30 IST.
     - cron: "0 0 * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Send even if the pile is below min_posts_per_issue"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -42,10 +50,20 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           # One line per private feed, matching the url_env in feeds.yaml:
           # FEED_EXAMPLE_PAID: ${{ secrets.FEED_EXAMPLE_PAID }}
-        run: python -m mornings run
+          # Read from the environment rather than interpolated into the script: no
+          # ${{ }} belongs inside a run: block, typed boolean or not.
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          if [ "${FORCE:-false}" = "true" ]; then
+            python -m mornings run --force
+          else
+            python -m mornings run
+          fi
 
       # Only reached when the send succeeded, so seen.json is committed exactly
-      # when the posts genuinely went out.
+      # when the posts genuinely went out. A run that held back changes nothing, so
+      # this step finds no diff and exits quietly.
       - name: Commit the state file
         run: |
           set -euo pipefail
@@ -56,7 +74,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add state/seen.json
-          git commit -m "Record posts sent on $(date -u +%Y-%m-%d)"
+          git commit -m "Record the issue sent on $(date -u +%Y-%m-%d)"
           for attempt in 1 2 3; do
             if git push; then
               exit 0

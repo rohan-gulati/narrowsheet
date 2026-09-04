@@ -93,12 +93,29 @@ publications:
     url: "https://raydalio.substack.com/feed"
 
 settings:
-  # A week, not a day. Most of these publications post weekly or slower, so a
+  # A month, not a day. Most of these publications post weekly or slower, so a
   # 26-hour window only ever caught 4 of 13 of them -- and anything that fell
   # outside it was missed permanently, since the window moves on. Widening is safe
-  # because state/seen.json already prevents re-sends: this is an "unread from the
-  # past week" queue, not a "published in the last week" one.
-  lookback_hours: 168
-  max_words_per_issue: 25000
+  # because state/seen.json already prevents re-sends: this is an "unread" queue,
+  # not a "published recently" one.
+  #
+  # It must also outlast max_hold_days below. A post held back for a fuller issue is
+  # still re-selected from the feed each run, so if the window closes before the
+  # issue ships, the post is dropped rather than delayed.
+  lookback_hours: 720
+
+  # Magazine, not newspaper. The cron still runs every morning, but an issue only
+  # goes out once this many posts have piled up; below it the run holds and the pile
+  # grows. At roughly 2 posts a day across these publications that lands an issue
+  # every four or five days. One line to retune once the rhythm is felt.
+  min_posts_per_issue: 10
+  # ...but never go quiet for longer than this. Once the oldest waiting post hits
+  # this age the issue ships short rather than leaving it to rot in the queue.
+  max_hold_days: 14
+
+  # A ten-post issue is routinely past the old 25,000 cap, which would trip the
+  # "oversized, shortest reads first" reordering on every issue rather than on a
+  # genuine outlier.
+  max_words_per_issue: 45000
   skip_if_empty: true
   imap_label: "kindle"

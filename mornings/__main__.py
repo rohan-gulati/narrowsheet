@@ -12,11 +12,12 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from .clean import clean_post
-from .config import load_config, setup_logging
+from .clean import CleanedPost, clean_post
+from .config import Settings, load_config, setup_logging
 from .deliver import (
     DeliveryConfig,
     DeliveryError,
+    load_issue_state,
     load_seen,
     notify_failure,
     notify_success,
@@ -104,11 +105,16 @@ def _run_pipeline(args: argparse.Namespace) -> int:
         state = "preview" if result.truncated else f"{result.word_count} words"
         log.info("cleaned %s — %s (%s)", post.publication, post.title, state)
 
+    if not (args.dry_run or args.force) and _should_hold(cleaned, settings, today):
+        return 0
+
     chapters = [c for c in cleaned if not c.truncated]
     previews = [c for c in cleaned if c.truncated]
 
+    issue_number = load_issue_state(args.state).number + 1
+
     out_path = Path(args.out) / f"{today.isoformat()}-morning-read.epub"
-    build_epub(chapters, previews, today, settings.max_words_per_issue, out_path)
+    build_epub(chapters, previews, today, settings.max_words_per_issue, out_path, issue_number)
 
     if args.dry_run:
         run_epubcheck(out_path)
@@ -118,16 +124,50 @@ def _run_pipeline(args: argparse.Namespace) -> int:
     delivery: DeliveryConfig | None = None
     try:
         delivery = DeliveryConfig.from_env(dict(os.environ))
-        send_issue(out_path, issue_title(today), delivery)
+        send_issue(out_path, issue_title(today, issue_number), delivery)
     except DeliveryError as exc:
         # Nothing is marked seen, so tomorrow's run retries these same posts.
         log.error("delivery failed: %s", exc)
         notify_failure(delivery, f"{exc}\n\n{len(cleaned)} posts were not delivered.")
         return 1
 
-    notify_success(delivery, chapters, previews)
-    record_sent(args.state, cleaned, today)
+    notify_success(delivery, chapters, previews, issue_number)
+    record_sent(args.state, cleaned, today, issue_number=issue_number)
     return 0
+
+
+def _should_hold(cleaned: list[CleanedPost], settings: Settings, today: date) -> bool:
+    """Decide whether to hold this pile back for a fuller issue.
+
+    Counted after cleaning on purpose: exclude_titles and min_words drop posts during
+    the clean, so a pre-clean count would happily ship an issue of six items that turns
+    into three. Holding costs nothing -- record_sent only runs on a confirmed send, so
+    the same posts are selected again next run and the pile grows.
+    """
+    if len(cleaned) >= settings.min_posts_per_issue:
+        return False
+
+    waiting = len(cleaned)
+    if waiting:
+        oldest = min(c.post.published.date() for c in cleaned)
+        held_days = (today - oldest).days
+        if held_days >= settings.max_hold_days:
+            log.info(
+                "only %d post(s), but the oldest has waited %d days; sending anyway",
+                waiting,
+                held_days,
+            )
+            return False
+        log.info(
+            "holding %d post(s); waiting for %d (oldest has waited %d of %d days)",
+            waiting,
+            settings.min_posts_per_issue,
+            held_days,
+            settings.max_hold_days,
+        )
+    else:
+        log.info("nothing waiting; no issue today")
+    return True
 
 
 def command_run(args: argparse.Namespace) -> int:
@@ -198,6 +238,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     run_parser = sub.add_parser("run", help="fetch, clean, build and send the issue")
     run_parser.add_argument("--dry-run", action="store_true", help="build only; no send, no state")
+    run_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="send even if fewer than settings.min_posts_per_issue have piled up",
+    )
     run_parser.add_argument("--config", default=DEFAULT_CONFIG)
     run_parser.add_argument("--state", default=DEFAULT_STATE)
     run_parser.add_argument("--out", default=DEFAULT_OUT)

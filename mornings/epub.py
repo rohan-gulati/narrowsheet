@@ -269,13 +269,18 @@ def _draw_tracked(
 ) -> float:
     """Letterspaced, centred text drawn from its top edge. Returns the height drawn.
 
-    Pillow has no tracking, so each glyph is placed individually.
+    Pillow has no tracking, so each glyph is placed individually -- but on a shared
+    baseline, not a shared top. Pillow's "t" anchor is each glyph's own ink top, so
+    anchoring per glyph floats short ones upward: an en dash between two runs of caps
+    ends up level with their cap height, reading as a macron rather than a dash.
     """
     widths = [draw.textlength(char, font=font) for char in text]
     total = sum(widths) + tracking * max(0, len(text) - 1)
     x = center_x - total / 2
+    # How far the whole string's ink top sits above the baseline.
+    baseline_y = top_y - draw.textbbox((0, 0), text, font=font, anchor="ls")[1]
     for char, width in zip(text, widths, strict=True):
-        draw.text((x, top_y), char, font=font, fill=fill, anchor="lt")
+        draw.text((x, baseline_y), char, font=font, fill=fill, anchor="ls")
         x += width + tracking
     return _text_height(draw, text, font)
 
@@ -311,6 +316,8 @@ def build_cover_image(
     preview_count: int,
     total_words: int,
     publications: list[str],
+    issue_number: int | None = None,
+    covers_from: date | None = None,
 ) -> bytes:
     """Draw the edition cover.
 
@@ -369,43 +376,61 @@ def build_cover_image(
         draw.text((middle, y), name, font=name_font, fill=COVER_MUTED, anchor="mt")
         y += pub_line_height
 
-    # Date block, centred in whatever space is left between the two rules.
-    month_font = _fit_text(draw, day.strftime("%B").upper(), _SERIF, 76, max_text_width - 200)
-    day_font = _font(_SERIF_BOLD, 300)
-    year_font = _font(_SERIF, 74)
-    weekday_font = _fit_text(draw, day.strftime("%A"), _SERIF_ITALIC, 62, max_text_width)
-
-    month_text = day.strftime("%B").upper()
-    day_text = day.strftime("%d").lstrip("0")
+    # Date block, centred in whatever space is left between the two rules. Issues are
+    # numbered and cover a span of days, so the issue number is the dominant mark and
+    # the span sits above it -- a single day numeral and a weekday would both be
+    # wrong for something that collects a week or more of reading.
+    span_text = format_range(covers_from or day, day)
+    number_text = f"No. {issue_number:02d}" if issue_number else day.strftime("%d").lstrip("0")
     year_text = day.strftime("%Y")
-    weekday_text = day.strftime("%A")
 
-    gaps = (42, 24, 46)
+    span_font = _fit_text(draw, span_text, _SERIF, 76, max_text_width - 200)
+    # Tracked drawing adds width the fit check doesn't see, so leave room for it.
+    number_font = _fit_text(draw, number_text, _SERIF_BOLD, 300, max_text_width - 120)
+    year_font = _font(_SERIF, 74)
+
+    gaps = (44, 34)
     heights = (
-        _text_height(draw, month_text, month_font),
-        _text_height(draw, day_text, day_font),
+        _text_height(draw, span_text, span_font),
+        _text_height(draw, number_text, number_font),
         _text_height(draw, year_text, year_font),
-        _text_height(draw, weekday_text, weekday_font),
     )
     block_height = sum(heights) + sum(gaps)
     band_top = rule_y + 40
     band_bottom = lower_rule_y - 40
     y = band_top + max(0.0, (band_bottom - band_top - block_height) / 2)
 
-    y += _draw_tracked(draw, middle, y, month_text, month_font, 15, COVER_INK) + gaps[0]
-    draw.text((middle, y), day_text, font=day_font, fill=COVER_INK, anchor="mt")
+    y += _draw_tracked(draw, middle, y, span_text, span_font, 13, COVER_INK) + gaps[0]
+    draw.text((middle, y), number_text, font=number_font, fill=COVER_INK, anchor="mt")
     y += heights[1] + gaps[1]
-    y += _draw_tracked(draw, middle, y, year_text, year_font, 12, COVER_MUTED) + gaps[2]
-    draw.text((middle, y), weekday_text, font=weekday_font, fill=COVER_MUTED, anchor="mt")
+    _draw_tracked(draw, middle, y, year_text, year_font, 12, COVER_MUTED)
 
     buffer = io.BytesIO()
     canvas.save(buffer, format="JPEG", quality=88, optimize=True, progressive=True)
     return buffer.getvalue()
 
 
-def issue_title(day: date) -> str:
+def issue_title(day: date, number: int | None = None) -> str:
     """ISO date first so the Kindle library sorts issues chronologically by title."""
+    if number:
+        return f"{day.isoformat()} — Morning Read No. {number}"
     return f"{day.isoformat()} — Morning Read"
+
+
+def format_range(start: date, end: date) -> str:
+    """The span an issue covers, as it reads on the cover: "AUG 21 - SEP 04".
+
+    A single-day issue collapses to one date rather than repeating itself.
+    """
+    if start >= end:
+        return end.strftime("%b %d").upper()
+    return f"{start.strftime('%b %d').upper()} \u2013 {end.strftime('%b %d').upper()}"
+
+
+def issue_range(chapters: list[CleanedPost], previews: list[CleanedPost], day: date) -> date:
+    """The oldest post in the issue -- what the issue actually covers, not a nominal period."""
+    dates = [c.post.published.date() for c in chapters + previews]
+    return min(dates + [day])
 
 
 def _escape(text: str) -> str:
@@ -439,10 +464,13 @@ def _cover_html(
     previews: list[CleanedPost],
     total_words: int,
     oversized: bool,
+    issue_number: int | None = None,
+    covers_from: date | None = None,
 ) -> str:
+    heading = f"No. {issue_number:02d}" if issue_number else day.isoformat()
     parts = [
-        f'<h1 class="cover-date">{day.isoformat()}</h1>',
-        f'<p class="cover-day">{day.strftime("%A")}</p>',
+        f'<h1 class="cover-date">{heading}</h1>',
+        f'<p class="cover-day">{format_range(covers_from or day, day)}</p>',
     ]
 
     if chapters:
@@ -497,13 +525,15 @@ def build_epub(
     day: date,
     max_words: int,
     out_path: Path,
+    issue_number: int | None = None,
 ) -> Path:
     """Write the issue and return its path."""
     chapters, total_words, oversized = order_chapters(posts, max_words)
+    covers_from = issue_range(chapters, previews, day)
 
     book = epub.EpubBook()
     book.set_identifier(f"morning-read-{day.isoformat()}-{uuid.uuid4().hex[:8]}")
-    book.set_title(issue_title(day))
+    book.set_title(issue_title(day, issue_number))
     book.set_language("en")
     book.add_author(AUTHOR)
 
@@ -520,7 +550,15 @@ def build_epub(
     try:
         book.set_cover(
             "cover.jpg",
-            build_cover_image(day, len(chapters), len(previews), total_words, publications),
+            build_cover_image(
+                day,
+                len(chapters),
+                len(previews),
+                total_words,
+                publications,
+                issue_number=issue_number,
+                covers_from=covers_from,
+            ),
         )
         # ebooklib marks its cover page linear="no", which EPUB 3.3 rejects unless
         # something hyperlinks to it. Making it the genuine first page is both valid
@@ -534,7 +572,9 @@ def build_epub(
         log.exception("cover generation failed; continuing without a cover image")
 
     contents = epub.EpubHtml(title="Contents", file_name="contents.xhtml", lang="en")
-    contents.content = _cover_html(day, chapters, previews, total_words, oversized)
+    contents.content = _cover_html(
+        day, chapters, previews, total_words, oversized, issue_number, covers_from
+    )
     contents.add_item(style)
     book.add_item(contents)
 

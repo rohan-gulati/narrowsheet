@@ -15,6 +15,8 @@ from mornings.epub import (
     COVER_SIZE,
     build_cover_image,
     build_epub,
+    format_range,
+    issue_range,
     issue_title,
     order_chapters,
 )
@@ -230,3 +232,61 @@ def test_stylesheet_declares_the_new_magazine_classes() -> None:
     ):
         assert selector in STYLESHEET, f"missing {selector} in the stylesheet"
     assert "text-align: center" in STYLESHEET, "blockquote should read as a centred pull quote"
+
+
+# --------------------------------------------------------------------------------
+# Issue identity: numbered issues covering a span of days, not a single date stamp.
+# --------------------------------------------------------------------------------
+
+
+def test_issue_title_keeps_the_iso_date_first() -> None:
+    """The Kindle library sorts by title, so the date has to lead."""
+    title = issue_title(date(2026, 9, 4), 7)
+    assert title.startswith("2026-09-04")
+    assert title.endswith("Morning Read No. 7")
+
+
+def test_issue_title_without_a_number_is_unchanged() -> None:
+    assert issue_title(date(2026, 9, 4)) == "2026-09-04 — Morning Read"
+
+
+def test_a_single_day_range_does_not_repeat_itself() -> None:
+    assert format_range(date(2026, 9, 4), date(2026, 9, 4)) == "SEP 04"
+
+
+def test_a_range_reads_from_oldest_to_newest() -> None:
+    assert format_range(date(2026, 8, 21), date(2026, 9, 4)) == "AUG 21 – SEP 04"
+
+
+def test_the_range_starts_at_the_oldest_post_not_the_build_day() -> None:
+    chapters = [make_post("New", 10, minutes_ago=60), make_post("Old", 10, minutes_ago=60 * 24 * 9)]
+    covers_from = issue_range(chapters, [], date.today())
+    assert covers_from == (datetime.now(UTC) - timedelta(days=9)).date()
+
+
+def test_the_contents_page_leads_with_the_issue_number(tmp_path: Path) -> None:
+    out = tmp_path / "issue.epub"
+    build_epub([make_post("A Post", 900)], [], date(2026, 9, 4), 25000, out, issue_number=7)
+    with zipfile.ZipFile(out) as archive:
+        contents = archive.read("EPUB/contents.xhtml").decode()
+    assert "No. 07" in contents
+    assert "SEP 04" in contents
+
+
+@pytest.mark.parametrize(
+    "number, covers_from",
+    [
+        (1, date(2026, 9, 4)),      # a single-day issue
+        (7, date(2026, 8, 21)),     # the usual case
+        (137, date(2026, 12, 19)),  # three digits, and a range crossing the new year
+    ],
+)
+def test_the_cover_renders_for_every_shape_of_issue(number: int, covers_from: date) -> None:
+    """Guards the layout, which is measured rather than positioned: a fixed-offset
+    version of this once put a 300px numeral straight through the month above it."""
+    day = date(2027, 1, 3) if number == 137 else date(2026, 9, 4)
+    data = build_cover_image(day, 10, 2, 31240, ["Noahpinion", "Technically"],
+                             issue_number=number, covers_from=covers_from)
+    assert data[:2] == b"\xff\xd8"  # JPEG
+    with Image.open(io.BytesIO(data)) as image:
+        assert image.size == COVER_SIZE

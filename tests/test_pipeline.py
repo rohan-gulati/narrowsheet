@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -237,3 +237,160 @@ def test_excluded_titles_never_reach_the_issue(
     assert excluded_title_pattern("How I AI: episode", pub.exclude_titles) == "How I AI"
     assert excluded_title_pattern("An essay | Some Guest", pub.exclude_titles) == " | "
     assert excluded_title_pattern("How to make people care", pub.exclude_titles) is None
+
+
+# --------------------------------------------------------------------------------
+# The send gate: an issue goes out when enough has piled up, not every morning.
+# --------------------------------------------------------------------------------
+
+GATED_YAML = """publications:
+  - name: "Lenny's Newsletter"
+    type: public
+    url: "https://www.lennysnewsletter.com/feed"
+    min_words: 700
+settings:
+  lookback_hours: 720
+  min_posts_per_issue: 3
+  max_hold_days: 14
+  skip_if_empty: true
+"""
+
+
+@pytest.fixture
+def gated_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    (tmp_path / "feeds.yaml").write_text(GATED_YAML)
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "seen.json").write_text('{"guids": {}}')
+    for key, value in ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(cli, "notify_success", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "notify_failure", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "send_issue", lambda *a, **k: None)
+    return tmp_path
+
+
+def _aged_post(title: str, guid: str, days_old: int = 0, words: int = 900) -> Post:
+    return Post(
+        guid=guid,
+        publication="Lenny's Newsletter",
+        title=title,
+        published=datetime.now(UTC) - timedelta(days=days_old),
+        html="<p>" + " ".join(["word"] * words) + "</p>",
+        link=f"https://www.lennysnewsletter.com/p/{guid}",
+    )
+
+
+def _built_an_issue(workspace: Path) -> bool:
+    return any((workspace / "out").glob("*.epub")) if (workspace / "out").exists() else False
+
+
+def test_below_the_threshold_the_run_holds(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two posts is not an issue. Nothing is built, sent or recorded."""
+    monkeypatch.setattr(
+        cli,
+        "fetch_all",
+        lambda config: [_aged_post("One", "g1"), _aged_post("Two", "g2")],
+    )
+    assert run_cli(gated_workspace) == 0
+    assert not _built_an_issue(gated_workspace)
+    assert seen_guids(gated_workspace) == {}
+
+
+def test_a_held_pile_ships_once_it_is_big_enough(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The posts held above are not lost -- they go out with the next arrival."""
+    posts = [_aged_post("One", "g1"), _aged_post("Two", "g2")]
+    monkeypatch.setattr(cli, "fetch_all", lambda config: list(posts))
+    assert run_cli(gated_workspace) == 0
+    assert seen_guids(gated_workspace) == {}
+
+    posts.append(_aged_post("Three", "g3"))
+    assert run_cli(gated_workspace) == 0
+    assert set(seen_guids(gated_workspace)) == {"g1", "g2", "g3"}
+
+
+def test_the_hold_ceiling_ships_a_short_issue(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A quiet fortnight must not leave a post to rot in the queue."""
+    monkeypatch.setattr(
+        cli,
+        "fetch_all",
+        lambda config: [_aged_post("Old news", "g-old", days_old=15)],
+    )
+    assert run_cli(gated_workspace) == 0
+    assert set(seen_guids(gated_workspace)) == {"g-old"}
+
+
+def test_force_ships_regardless_of_the_threshold(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "fetch_all", lambda config: [_aged_post("One", "g1")])
+    assert run_cli(gated_workspace, "--force") == 0
+    assert set(seen_guids(gated_workspace)) == {"g1"}
+
+
+def test_dry_run_ignores_the_gate(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "fetch_all", lambda config: [_aged_post("One", "g1")])
+    assert run_cli(gated_workspace, "--dry-run") == 0
+    assert _built_an_issue(gated_workspace)
+    assert seen_guids(gated_workspace) == {}
+
+
+def test_the_gate_counts_cleaned_posts_not_fetched_ones(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """min_words drops posts during the clean, so counting before it would ship an
+    issue of three that turns into two."""
+    monkeypatch.setattr(
+        cli,
+        "fetch_all",
+        lambda config: [
+            _aged_post("One", "g1"),
+            _aged_post("Two", "g2"),
+            _aged_post("Podcast show notes", "g3", words=120),
+        ],
+    )
+    assert run_cli(gated_workspace) == 0
+    assert seen_guids(gated_workspace) == {}
+
+
+def test_issues_are_numbered_and_the_counter_survives(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "fetch_all", lambda config: [_aged_post("One", "g1")])
+    assert run_cli(gated_workspace, "--force") == 0
+    state = json.loads((gated_workspace / "state" / "seen.json").read_text())
+    assert state["issue_number"] == 1
+
+    monkeypatch.setattr(cli, "fetch_all", lambda config: [_aged_post("Two", "g2")])
+    assert run_cli(gated_workspace, "--force") == 0
+    state = json.loads((gated_workspace / "state" / "seen.json").read_text())
+    assert state["issue_number"] == 2
+    assert set(state["guids"]) == {"g1", "g2"}
+
+
+def test_the_issue_number_reaches_the_epub_and_the_notification(
+    gated_workspace: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: dict[str, str] = {}
+    monkeypatch.setattr(
+        cli, "send_issue", lambda path, subject, config: sent.update(subject=subject)
+    )
+    notified: dict[str, int] = {}
+    monkeypatch.setattr(
+        cli,
+        "notify_success",
+        lambda config, chapters, previews, number: notified.update(number=number),
+    )
+    monkeypatch.setattr(cli, "fetch_all", lambda config: [_aged_post("One", "g1")])
+    assert run_cli(gated_workspace, "--force") == 0
+
+    assert sent["subject"].endswith("Morning Read No. 1")
+    assert notified["number"] == 1
+    assert "No. 01" in _titles_in_issue(gated_workspace)

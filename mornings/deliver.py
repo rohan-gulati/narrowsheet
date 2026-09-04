@@ -159,13 +159,17 @@ def _post_ntfy(
 
 
 def notify_success(config: DeliveryConfig, chapters: list[CleanedPost],
-                   previews: list[CleanedPost]) -> None:
+                   previews: list[CleanedPost], issue_number: int | None = None) -> None:
     if not config.ntfy_topic:
         log.info("no NTFY_TOPIC configured; skipping notification")
         return
     lines = [f"{c.post.publication} — {c.post.title}" for c in chapters]
     lines += [f"[preview] {p.post.publication} — {p.post.title}" for p in previews]
-    title = f"Morning Read — {len(chapters)} post{'' if len(chapters) == 1 else 's'}"
+    posts = f"{len(chapters)} post{'' if len(chapters) == 1 else 's'}"
+    if issue_number:
+        title = f"Morning Read No. {issue_number} — {posts}"
+    else:
+        title = f"Morning Read — {posts}"
     try:
         _post_ntfy(config.ntfy_topic, title, "\n".join(lines) or "Nothing new today.")
     except Exception as exc:
@@ -187,16 +191,48 @@ def notify_failure(config: DeliveryConfig | None, summary: str) -> None:
         _annotate(f"The run failed AND the failure notification failed: {type(exc).__name__}")
 
 
-def load_seen(path: str | Path) -> set[str]:
+@dataclass(frozen=True)
+class IssueState:
+    """Which issue we are up to, and when the last one went out."""
+
+    number: int = 0
+    last_issue_date: date | None = None
+
+
+def _read_state(path: str | Path) -> dict:
     file = Path(path)
     if not file.exists():
-        return set()
+        return {}
     try:
         data = json.loads(file.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        log.warning("%s is not valid JSON; treating every post as unseen", file)
-        return set()
-    return set(data.get("guids", {}))
+        log.warning("%s is not valid JSON; treating it as empty", file)
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def load_issue_state(path: str | Path) -> IssueState:
+    """Read the issue counter, degrading to "no issues yet" on anything unreadable.
+
+    These keys live alongside `guids` in the same state file, so the counter rides
+    along on the commit the Action already makes. A state file written before
+    numbering existed simply has neither key.
+    """
+    data = _read_state(path)
+    try:
+        number = int(data.get("issue_number", 0))
+    except (TypeError, ValueError):
+        number = 0
+    raw_date = data.get("last_issue_date")
+    try:
+        last = date.fromisoformat(raw_date) if isinstance(raw_date, str) else None
+    except ValueError:
+        last = None
+    return IssueState(number=max(0, number), last_issue_date=last)
+
+
+def load_seen(path: str | Path) -> set[str]:
+    return set(_read_state(path).get("guids", {}))
 
 
 def record_sent(
@@ -204,16 +240,15 @@ def record_sent(
     posts: list[CleanedPost],
     today: date | None = None,
     retention_days: int = STATE_RETENTION_DAYS,
+    issue_number: int | None = None,
 ) -> int:
     """Mark posts as sent and prune entries older than the retention window."""
     file = Path(path)
     today = today or datetime.now(UTC).date()
-    guids: dict[str, str] = {}
-    if file.exists():
-        try:
-            guids = json.loads(file.read_text(encoding="utf-8")).get("guids", {})
-        except json.JSONDecodeError:
-            log.warning("%s was unreadable; starting a fresh state file", file)
+    existing = _read_state(file)
+    guids: dict[str, str] = existing.get("guids") or {}
+    if not isinstance(guids, dict):
+        guids = {}
 
     for post in posts:
         guids[post.post.guid] = today.isoformat()
@@ -228,7 +263,16 @@ def record_sent(
             continue  # drop malformed entries
 
     file.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"guids": dict(sorted(kept.items(), key=lambda kv: (kv[1], kv[0])))}
+    payload: dict[str, object] = {}
+    if issue_number is not None:
+        payload["issue_number"] = issue_number
+        payload["last_issue_date"] = today.isoformat()
+    else:
+        # Keep whatever numbering is already on disk rather than dropping it.
+        for key in ("issue_number", "last_issue_date"):
+            if key in existing:
+                payload[key] = existing[key]
+    payload["guids"] = dict(sorted(kept.items(), key=lambda kv: (kv[1], kv[0])))
     file.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     log.info("recorded %d posts as sent (%d tracked)", len(posts), len(kept))
     return len(kept)

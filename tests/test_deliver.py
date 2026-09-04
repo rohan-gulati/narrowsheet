@@ -13,6 +13,8 @@ from mornings import deliver
 from mornings.deliver import (
     DeliveryConfig,
     DeliveryError,
+    IssueState,
+    load_issue_state,
     load_seen,
     notify_failure,
     notify_success,
@@ -360,3 +362,51 @@ def test_ntfy_payload_matches_the_api_contract(monkeypatch: pytest.MonkeyPatch) 
     assert seen[0]["priority"] == deliver.NTFY_PRIORITY_DEFAULT
     assert seen[1]["priority"] == deliver.NTFY_PRIORITY_HIGH
     assert "—" in seen[0]["title"], "the em dash must survive the JSON round trip"
+
+
+# --------------------------------------------------------------------------------
+# Issue numbering. The counter rides in the same state file the Action commits.
+# --------------------------------------------------------------------------------
+
+
+def test_issue_state_is_zero_when_there_is_no_file(tmp_path: Path) -> None:
+    assert load_issue_state(tmp_path / "nothing.json") == IssueState(0, None)
+
+
+def test_issue_state_reads_a_file_written_before_numbering_existed(tmp_path: Path) -> None:
+    """The real state file on disk has only `guids`; it must not crash or renumber."""
+    path = tmp_path / "seen.json"
+    path.write_text('{"guids": {"a": "2026-09-01"}}')
+    assert load_issue_state(path) == IssueState(0, None)
+    assert load_seen(path) == {"a"}
+
+
+def test_issue_state_survives_a_corrupt_file(tmp_path: Path) -> None:
+    path = tmp_path / "seen.json"
+    path.write_text("{not json at all")
+    assert load_issue_state(path) == IssueState(0, None)
+
+
+def test_issue_state_ignores_nonsense_values(tmp_path: Path) -> None:
+    path = tmp_path / "seen.json"
+    path.write_text('{"issue_number": "seven", "last_issue_date": "the fifth", "guids": {}}')
+    assert load_issue_state(path) == IssueState(0, None)
+
+
+def test_record_sent_writes_the_counter_and_prunes(tmp_path: Path) -> None:
+    path = tmp_path / "seen.json"
+    path.write_text('{"guids": {"stale": "2020-01-01"}}')
+    record_sent(path, [make_post("Fresh", 10)], date(2026, 9, 4), issue_number=7)
+
+    state = json.loads(path.read_text())
+    assert state["issue_number"] == 7
+    assert state["last_issue_date"] == "2026-09-04"
+    assert set(state["guids"]) == {"guid-Fresh"}
+    assert load_issue_state(path) == IssueState(7, date(2026, 9, 4))
+
+
+def test_record_sent_keeps_the_counter_when_not_given_one(tmp_path: Path) -> None:
+    path = tmp_path / "seen.json"
+    path.write_text('{"issue_number": 4, "last_issue_date": "2026-09-01", "guids": {}}')
+    record_sent(path, [make_post("A", 10)], date(2026, 9, 4))
+    assert load_issue_state(path) == IssueState(4, date(2026, 9, 1))
