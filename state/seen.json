@@ -1,4 +1,6 @@
 {
+  "issue_number": 1,
+  "last_issue_date": "2026-09-05",
   "guids": {
     "https://read.technically.dev/p/whats-going-on-with-open-weight-models": "2026-08-18",
     "https://stratechery.com/?p=19725": "2026-08-18",
@@ -37,6 +39,17 @@
     "https://www.lennysnewsletter.com/p/how-to-turn-your-ai-into-a-world": "2026-09-02",
     "https://www.thealgorithmicbridge.com/p/the-ai-industry-has-a-really-dark-70d": "2026-09-03",
     "https://unchartedterritories.tomaspueyo.com/p/weapons-of-mosquito-destruction": "2026-09-04",
-    "https://www.noahpinion.blog/p/why-you-wont-get-a-flying-car": "2026-09-04"
+    "https://www.noahpinion.blog/p/why-you-wont-get-a-flying-car": "2026-09-04",
+    "https://read.technically.dev/p/dispatch-august-9-2026": "2026-09-05",
+    "https://read.technically.dev/p/how-do-computer-use-agents-work": "2026-09-05",
+    "https://read.technically.dev/p/software-eng-vibe-coders-frontends-backends": "2026-09-05",
+    "https://unchartedterritories.tomaspueyo.com/p/space-dispatch": "2026-09-05",
+    "https://www.lennysnewsletter.com/p/how-to-make-people-care-about-your": "2026-09-05",
+    "https://www.noahpinion.blog/p/are-the-democrats-going-to-save-us": "2026-09-05",
+    "https://www.noahpinion.blog/p/banning-data-centers-would-blow-up": "2026-09-05",
+    "https://www.noahpinion.blog/p/roundup-86-unintended-consequences": "2026-09-05",
+    "https://www.noahpinion.blog/p/should-we-pace-ai-self-improvement": "2026-09-05",
+    "https://www.noahpinion.blog/p/the-poverty-of-anti-tech-thought": "2026-09-05",
+    "https://www.thealgorithmicbridge.com/p/gpt-6-astra-too-good": "2026-09-05"
   }
 }
