@@ -1,6 +1,6 @@
 {
-  "issue_number": 1,
-  "last_issue_date": "2026-09-05",
+  "issue_number": 2,
+  "last_issue_date": "2026-09-13",
   "guids": {
     "https://read.technically.dev/p/whats-going-on-with-open-weight-models": "2026-08-18",
     "https://stratechery.com/?p=19725": "2026-08-18",
@@ -50,6 +50,19 @@
     "https://www.noahpinion.blog/p/roundup-86-unintended-consequences": "2026-09-05",
     "https://www.noahpinion.blog/p/should-we-pace-ai-self-improvement": "2026-09-05",
     "https://www.noahpinion.blog/p/the-poverty-of-anti-tech-thought": "2026-09-05",
-    "https://www.thealgorithmicbridge.com/p/gpt-6-astra-too-good": "2026-09-05"
+    "https://www.thealgorithmicbridge.com/p/gpt-6-astra-too-good": "2026-09-05",
+    "https://contraptions.venkateshrao.com/p/our-eukaryotic-moment": "2026-09-13",
+    "https://contraptions.venkateshrao.com/p/the-curiously-playable-universe": "2026-09-13",
+    "https://read.technically.dev/p/security-for-vibe-coders": "2026-09-13",
+    "https://unchartedterritories.tomaspueyo.com/p/how-to-get-rid-of-mosquitoes-around": "2026-09-13",
+    "https://www.lennysnewsletter.com/p/community-wisdom-ai-basketball-coaching": "2026-09-13",
+    "https://www.lennysnewsletter.com/p/community-wisdom-driving-ai-adoption": "2026-09-13",
+    "https://www.noahpinion.blog/p/ai-keeps-stubbornly-refusing-to-take": "2026-09-13",
+    "https://www.noahpinion.blog/p/america-is-still-beating-china-in": "2026-09-13",
+    "https://www.noahpinion.blog/p/get-the-middle-east-out-of-my-politics": "2026-09-13",
+    "https://www.noahpinion.blog/p/liberalism-needs-a-new-philosophy": "2026-09-13",
+    "https://www.thealgorithmicbridge.com/p/a-bad-day-for-humans-a-worse-day": "2026-09-13",
+    "https://www.thealgorithmicbridge.com/p/millennium-pastimes": "2026-09-13",
+    "https://www.thealgorithmicbridge.com/p/the-singularity-paradox": "2026-09-13"
   }
 }
