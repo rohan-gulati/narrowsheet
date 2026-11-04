@@ -1,16 +1,7 @@
 {
-  "issue_number": 10,
-  "last_issue_date": "2026-10-30",
+  "issue_number": 11,
+  "last_issue_date": "2026-11-04",
   "guids": {
-    "https://www.oneusefulthing.org/p/agency-and-agents": "2026-08-31",
-    "https://contraptions.venkateshrao.com/p/walter-mitty-effects-in-ai-incident": "2026-09-01",
-    "https://www.noahpinion.blog/p/roundup-87-technology-bad": "2026-09-01",
-    "https://read.technically.dev/p/how-to-use-open-weights-ai-models": "2026-09-02",
-    "https://unchartedterritories.tomaspueyo.com/p/should-we-eradicate-mosquitoes": "2026-09-02",
-    "https://www.lennysnewsletter.com/p/how-to-turn-your-ai-into-a-world": "2026-09-02",
-    "https://www.thealgorithmicbridge.com/p/the-ai-industry-has-a-really-dark-70d": "2026-09-03",
-    "https://unchartedterritories.tomaspueyo.com/p/weapons-of-mosquito-destruction": "2026-09-04",
-    "https://www.noahpinion.blog/p/why-you-wont-get-a-flying-car": "2026-09-04",
     "https://read.technically.dev/p/dispatch-august-9-2026": "2026-09-05",
     "https://read.technically.dev/p/how-do-computer-use-agents-work": "2026-09-05",
     "https://read.technically.dev/p/software-eng-vibe-coders-frontends-backends": "2026-09-05",
@@ -112,6 +103,16 @@
     "https://www.noahpinion.blog/p/france-and-the-limits-of-liberalism": "2026-10-30",
     "https://www.noahpinion.blog/p/roundup-90-in-which-noah-joins-a": "2026-10-30",
     "https://www.noahpinion.blog/p/the-internet-breaks": "2026-10-30",
-    "https://www.thealgorithmicbridge.com/p/new-study-anthropic-just-gave-you": "2026-10-30"
+    "https://www.thealgorithmicbridge.com/p/new-study-anthropic-just-gave-you": "2026-10-30",
+    "https://contraptions.venkateshrao.com/p/experiments-with-monstrousness": "2026-11-04",
+    "https://read.technically.dev/p/the-vibe-coders-guide-to-observability": "2026-11-04",
+    "https://unchartedterritories.tomaspueyo.com/p/the-end-of-paris": "2026-11-04",
+    "https://unchartedterritories.tomaspueyo.com/p/will-ai-save-france-from-bankruptcy": "2026-11-04",
+    "https://www.lennysnewsletter.com/p/community-wisdom-the-biggest-sources": "2026-11-04",
+    "https://www.lennysnewsletter.com/p/lennys-newsletter-holiday-gift-guide-057": "2026-11-04",
+    "https://www.noahpinion.blog/p/anthropics-moat-is-claude": "2026-11-04",
+    "https://www.noahpinion.blog/p/farewell-my-captain": "2026-11-04",
+    "https://www.thealgorithmicbridge.com/p/new-survey-math-students-are-giving": "2026-11-04",
+    "https://www.thealgorithmicbridge.com/p/the-dawn-of-a-new-ai-paradigm-weight": "2026-11-04"
   }
 }
