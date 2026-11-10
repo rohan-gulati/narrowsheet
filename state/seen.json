@@ -1,18 +1,7 @@
 {
-  "issue_number": 11,
-  "last_issue_date": "2026-11-04",
+  "issue_number": 12,
+  "last_issue_date": "2026-11-10",
   "guids": {
-    "https://read.technically.dev/p/dispatch-august-9-2026": "2026-09-05",
-    "https://read.technically.dev/p/how-do-computer-use-agents-work": "2026-09-05",
-    "https://read.technically.dev/p/software-eng-vibe-coders-frontends-backends": "2026-09-05",
-    "https://unchartedterritories.tomaspueyo.com/p/space-dispatch": "2026-09-05",
-    "https://www.lennysnewsletter.com/p/how-to-make-people-care-about-your": "2026-09-05",
-    "https://www.noahpinion.blog/p/are-the-democrats-going-to-save-us": "2026-09-05",
-    "https://www.noahpinion.blog/p/banning-data-centers-would-blow-up": "2026-09-05",
-    "https://www.noahpinion.blog/p/roundup-86-unintended-consequences": "2026-09-05",
-    "https://www.noahpinion.blog/p/should-we-pace-ai-self-improvement": "2026-09-05",
-    "https://www.noahpinion.blog/p/the-poverty-of-anti-tech-thought": "2026-09-05",
-    "https://www.thealgorithmicbridge.com/p/gpt-6-astra-too-good": "2026-09-05",
     "https://contraptions.venkateshrao.com/p/our-eukaryotic-moment": "2026-09-13",
     "https://contraptions.venkateshrao.com/p/the-curiously-playable-universe": "2026-09-13",
     "https://read.technically.dev/p/security-for-vibe-coders": "2026-09-13",
@@ -113,6 +102,17 @@
     "https://www.noahpinion.blog/p/anthropics-moat-is-claude": "2026-11-04",
     "https://www.noahpinion.blog/p/farewell-my-captain": "2026-11-04",
     "https://www.thealgorithmicbridge.com/p/new-survey-math-students-are-giving": "2026-11-04",
-    "https://www.thealgorithmicbridge.com/p/the-dawn-of-a-new-ai-paradigm-weight": "2026-11-04"
+    "https://www.thealgorithmicbridge.com/p/the-dawn-of-a-new-ai-paradigm-weight": "2026-11-04",
+    "https://blog.aifutures.org/p/verified-compute-allocation-disclosures": "2026-11-10",
+    "https://contraptions.venkateshrao.com/p/descent-into-the-computational-sublime": "2026-11-10",
+    "https://read.technically.dev/p/how-ai-learns-by-doing": "2026-11-10",
+    "https://unchartedterritories.tomaspueyo.com/p/the-ut-shop-understand-space-with": "2026-11-10",
+    "https://www.noahpinion.blog/p/for-the-democrats-now-comes-the-hard": "2026-11-10",
+    "https://www.noahpinion.blog/p/noah-brad-delong-and-dan-wang-discuss": "2026-11-10",
+    "https://www.noahpinion.blog/p/noah-smith-and-azeem-azhar-discuss": "2026-11-10",
+    "https://www.noahpinion.blog/p/normal-americans-punished-maga": "2026-11-10",
+    "https://www.noahpinion.blog/p/why-im-becoming-a-china-bear": "2026-11-10",
+    "https://www.oneusefulthing.org/p/fable-52-and-jagged-agi": "2026-11-10",
+    "https://www.thealgorithmicbridge.com/p/the-ai-industry-thinks-it-has-a-pr": "2026-11-10"
   }
 }
