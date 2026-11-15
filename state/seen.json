@@ -1,20 +1,7 @@
 {
-  "issue_number": 12,
-  "last_issue_date": "2026-11-10",
+  "issue_number": 13,
+  "last_issue_date": "2026-11-15",
   "guids": {
-    "https://contraptions.venkateshrao.com/p/our-eukaryotic-moment": "2026-09-13",
-    "https://contraptions.venkateshrao.com/p/the-curiously-playable-universe": "2026-09-13",
-    "https://read.technically.dev/p/security-for-vibe-coders": "2026-09-13",
-    "https://unchartedterritories.tomaspueyo.com/p/how-to-get-rid-of-mosquitoes-around": "2026-09-13",
-    "https://www.lennysnewsletter.com/p/community-wisdom-ai-basketball-coaching": "2026-09-13",
-    "https://www.lennysnewsletter.com/p/community-wisdom-driving-ai-adoption": "2026-09-13",
-    "https://www.noahpinion.blog/p/ai-keeps-stubbornly-refusing-to-take": "2026-09-13",
-    "https://www.noahpinion.blog/p/america-is-still-beating-china-in": "2026-09-13",
-    "https://www.noahpinion.blog/p/get-the-middle-east-out-of-my-politics": "2026-09-13",
-    "https://www.noahpinion.blog/p/liberalism-needs-a-new-philosophy": "2026-09-13",
-    "https://www.thealgorithmicbridge.com/p/a-bad-day-for-humans-a-worse-day": "2026-09-13",
-    "https://www.thealgorithmicbridge.com/p/millennium-pastimes": "2026-09-13",
-    "https://www.thealgorithmicbridge.com/p/the-singularity-paradox": "2026-09-13",
     "https://contraptions.venkateshrao.com/p/ea-safety": "2026-09-19",
     "https://contraptions.venkateshrao.com/p/the-accelerationist-case-for-frontier": "2026-09-19",
     "https://read.technically.dev/p/whats-google-doing-with-ai": "2026-09-19",
@@ -113,6 +100,17 @@
     "https://www.noahpinion.blog/p/normal-americans-punished-maga": "2026-11-10",
     "https://www.noahpinion.blog/p/why-im-becoming-a-china-bear": "2026-11-10",
     "https://www.oneusefulthing.org/p/fable-52-and-jagged-agi": "2026-11-10",
-    "https://www.thealgorithmicbridge.com/p/the-ai-industry-thinks-it-has-a-pr": "2026-11-10"
+    "https://www.thealgorithmicbridge.com/p/the-ai-industry-thinks-it-has-a-pr": "2026-11-10",
+    "https://blog.aifutures.org/p/q35-timelines-update-looks-like-the": "2026-11-15",
+    "https://read.technically.dev/p/what-is-agent-memory": "2026-11-15",
+    "https://unchartedterritories.tomaspueyo.com/p/how-i-use-ai": "2026-11-15",
+    "https://unchartedterritories.tomaspueyo.com/p/there-is-no-moat": "2026-11-15",
+    "https://www.lennysnewsletter.com/p/community-wisdom-when-you-become": "2026-11-15",
+    "https://www.lennysnewsletter.com/p/state-of-the-tech-job-market-late": "2026-11-15",
+    "https://www.noahpinion.blog/p/brad-and-noah-discuss-the-reindustrialization": "2026-11-15",
+    "https://www.noahpinion.blog/p/im-feeling-more-optimistic-about": "2026-11-15",
+    "https://www.noahpinion.blog/p/india-is-quietly-doing-great": "2026-11-15",
+    "https://www.thealgorithmicbridge.com/p/claude-fable-52-too-good": "2026-11-15",
+    "https://www.thealgorithmicbridge.com/p/who-stands-to-benefit-from-jensen": "2026-11-15"
   }
 }
