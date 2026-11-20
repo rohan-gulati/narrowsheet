@@ -1,19 +1,7 @@
 {
-  "issue_number": 13,
-  "last_issue_date": "2026-11-15",
+  "issue_number": 14,
+  "last_issue_date": "2026-11-20",
   "guids": {
-    "https://contraptions.venkateshrao.com/p/ea-safety": "2026-09-19",
-    "https://contraptions.venkateshrao.com/p/the-accelerationist-case-for-frontier": "2026-09-19",
-    "https://read.technically.dev/p/whats-google-doing-with-ai": "2026-09-19",
-    "https://unchartedterritories.tomaspueyo.com/p/japan-geography": "2026-09-19",
-    "https://unchartedterritories.tomaspueyo.com/p/por-que-japon-esta-tan-poblado-a": "2026-09-19",
-    "https://unchartedterritories.tomaspueyo.com/p/whats-the-value-of-a-life": "2026-09-19",
-    "https://www.lennysnewsletter.com/p/60-creative-growth-ideas": "2026-09-19",
-    "https://www.noahpinion.blog/p/roundup-88-is-it-time-to-panic-yet": "2026-09-19",
-    "https://www.noahpinion.blog/p/the-anti-american-right": "2026-09-19",
-    "https://www.noahpinion.blog/p/two-missing-pieces-in-the-ai-safety": "2026-09-19",
-    "https://www.oneusefulthing.org/p/the-overhang": "2026-09-19",
-    "https://www.thealgorithmicbridge.com/p/the-ai-industry-has-finally-discovered": "2026-09-19",
     "https://contraptions.venkateshrao.com/p/humanism-without-all-humans": "2026-09-21",
     "https://unchartedterritories.tomaspueyo.com/p/que-esta-pasando-en-ceuta": "2026-09-21",
     "https://www.lennysnewsletter.com/p/community-wisdom-finding-your-first": "2026-09-21",
@@ -111,6 +99,17 @@
     "https://www.noahpinion.blog/p/im-feeling-more-optimistic-about": "2026-11-15",
     "https://www.noahpinion.blog/p/india-is-quietly-doing-great": "2026-11-15",
     "https://www.thealgorithmicbridge.com/p/claude-fable-52-too-good": "2026-11-15",
-    "https://www.thealgorithmicbridge.com/p/who-stands-to-benefit-from-jensen": "2026-11-15"
+    "https://www.thealgorithmicbridge.com/p/who-stands-to-benefit-from-jensen": "2026-11-15",
+    "https://blog.aifutures.org/p/pacing-ai-via-compute-reallocation": "2026-11-20",
+    "https://contraptions.venkateshrao.com/p/the-profligacy-principle": "2026-11-20",
+    "https://read.technically.dev/p/are-reasoning-models-actually-thinking": "2026-11-20",
+    "https://read.technically.dev/p/back-to-the-stone-ages-all-about": "2026-11-20",
+    "https://unchartedterritories.tomaspueyo.com/p/hardware-is-software": "2026-11-20",
+    "https://www.lennysnewsletter.com/p/35-premium-tools-free-for-a-yearnow": "2026-11-20",
+    "https://www.noahpinion.blog/p/bumbition": "2026-11-20",
+    "https://www.noahpinion.blog/p/roundup-91-rocketing-into-the-technofuture": "2026-11-20",
+    "https://www.thealgorithmicbridge.com/p/how-nvidias-crisis-could-end-the": "2026-11-20",
+    "https://www.thealgorithmicbridge.com/p/the-fall-of-award-winning-literature": "2026-11-20",
+    "https://www.thealgorithmicbridge.com/p/wall-street-is-wrong-about-anthropic": "2026-11-20"
   }
 }
